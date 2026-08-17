@@ -23,8 +23,10 @@ import {
   rifiutaAdmin as rifiutaSwapAdmin,
   applicaScambio,
 } from "./domain/swapWorkflow.js";
-import { haStoricoTurni, disattivaDipendente, attivaDipendente, eliminaDipendente as eliminaDipendenteDominio } from "./domain/employeeLifecycle.js";
+import { puoEliminareDefinitivamente, disattivaDipendente, attivaDipendente } from "./domain/employeeLifecycle.js";
 import { generaICS } from "./domain/icsExport.js";
+import { profiloDaRiga, rigaDaProfiloParziale } from "./domain/profiliMapper.js";
+import { supabase } from "./lib/supabaseClient.js";
 import logoPlannerTurni from "./assets/logo-planner-turni.png";
 import logoIcona from "./assets/logo-icon.png";
 
@@ -137,30 +139,6 @@ const COPERTURA_DEFAULT = { C1: 1, C2: 1, A1: 1, A2: 1, N: 1 };
 // Quote annue di default (bozza: valori indicativi, da confermare/rendere modificabili in seguito)
 const QUOTA_FERIE_DEFAULT = 26; // giorni
 const QUOTA_PERMESSI_ORE_DEFAULT = 88; // ore
-
-// rotationSlot: FIX #3, valore stabile assegnato una volta per sempre a ogni dipendente
-// rotante, usato dalla rotazione dei riposi — non va MAI ricalcolato dalla posizione
-// nell'array (a differenza del vecchio comportamento), altrimenti aggiungere/rimuovere/
-// riordinare qualcuno altera la rotazione di tutti gli altri.
-// active: FIX #10, flag di attivazione — chi è active:false non entra più nella
-// generazione automatica dei turni, ma i suoi turni storici restano intoccati.
-const DIPENDENTI_INIZIALI = [
-  { id: 1, cognome: "Visonà Dalla Pozza", nome: "Matteo", tipo: "direttore", riposoTipo: "fisso", riposoFissoGiorno: 5, rotationSlot: 0, active: true, colore: COLORI_DIPENDENTE[0], pin: "1111", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 2, cognome: "Pugnalin", nome: "Chiara", tipo: "fom", turniExtra: ["C1", "C2", "A1", "A2"], riposoTipo: "fisso", riposoFissoGiorno: 5, rotationSlot: 1, active: true, colore: COLORI_DIPENDENTE[1], pin: "4444", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 3, cognome: "Simone", nome: "Ana Beatrice", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 2, active: true, colore: COLORI_DIPENDENTE[2], pin: "2222", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 4, cognome: "De Rossi", nome: "Rima", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 3, active: true, colore: COLORI_DIPENDENTE[3], pin: "3333", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 5, cognome: "Breda", nome: "Francesco", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 4, active: true, colore: COLORI_DIPENDENTE[4], pin: "5555", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 6, cognome: "Anoè", nome: "Omar", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 5, active: true, colore: COLORI_DIPENDENTE[5], pin: "6666", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 7, cognome: "Kovtsunyak", nome: "Romana", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 6, active: true, colore: COLORI_DIPENDENTE[6], pin: "7777", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 8, cognome: "Campini", nome: "Raoul", tipo: "diurno", turniExtra: ["N"], riposoTipo: "rotante", rotationSlot: 7, active: true, colore: COLORI_DIPENDENTE[7], pin: "8888", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 9, cognome: "Cheng", nome: "Kevin Teng", tipo: "turnante", riposoTipo: "rotante", rotationSlot: 8, active: true, colore: COLORI_DIPENDENTE[8], pin: "9999", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-  { id: 10, cognome: "Zaitev", nome: "Constantin", tipo: "notturno", riposoTipo: "rotante", rotationSlot: 9, active: true, colore: COLORI_DIPENDENTE[9], pin: "1010", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
-];
-
-// Chiara è FOM: fa principalmente F1/F2, i diurni sono un turno di riserva
-const PREFERENZE_INIZIALI = {
-  2: { ordinePreferenza: ["F1", "F2"] },
-};
 
 // Converte un colore esadecimale in rgba con l'opacità indicata (per sfondi tenui dei badge)
 function hexRgba(hex, alpha) {
@@ -301,7 +279,10 @@ export default function PlannerTurni() {
 
   const statoSalvato = useMemo(() => caricaStatoSalvato(), []);
 
-  const [dipendenti, setDipendenti] = useState(statoSalvato.dipendenti ?? DIPENDENTI_INIZIALI);
+  // I dipendenti ora vivono in Supabase (tabella `profiles`, condivisa tra tutti i
+  // dispositivi), non più in localStorage: caricati dopo il login, vedi l'effetto di
+  // autenticazione più sotto.
+  const [dipendenti, setDipendenti] = useState([]);
   const [statoPerMese, setStatoPerMese] = useState(statoSalvato.statoPerMese ?? {}); // { "anno_mese": "bozza" | "definitivo" }
   const chiaveMese = `${anno}_${mese}`;
   const statoMese = statoPerMese[chiaveMese] ?? "bozza";
@@ -313,7 +294,7 @@ export default function PlannerTurni() {
   }
   const [turni, setTurni] = useState(statoSalvato.turni ?? {}); // { "empId_anno_mese_giorno": { code, dnm } }
   const [coperturaRegole, setCoperturaRegole] = useState(statoSalvato.coperturaRegole ?? COPERTURA_DEFAULT);
-  const [preferenze, setPreferenze] = useState(statoSalvato.preferenze ?? PREFERENZE_INIZIALI);
+  const [preferenze, setPreferenze] = useState(statoSalvato.preferenze ?? {});
   const [richiesteSwap, setRichiesteSwap] = useState(statoSalvato.richiesteSwap ?? []);
   const [richiesteAssenza, setRichiesteAssenza] = useState(statoSalvato.richiesteAssenza ?? []);
   const [richiestePreassegnazione, setRichiestePreassegnazione] = useState(statoSalvato.richiestePreassegnazione ?? []);
@@ -322,10 +303,15 @@ export default function PlannerTurni() {
   const [notificheLette, setNotificheLette] = useState(statoSalvato.notificheLette ?? {});
   const [pannelloNotificheAperto, setPannelloNotificheAperto] = useState(false);
 
-  const [utenteLoggato, setUtenteLoggato] = useState(null); // { id, isAdmin }
-  const [loginEmpId, setLoginEmpId] = useState("");
+  const [utenteLoggato, setUtenteLoggato] = useState(null); // { id, isAdmin, email }
+  const [sessionePronta, setSessionePronta] = useState(false); // true dopo il primo controllo sessione Supabase
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPin, setLoginPin] = useState("");
   const [loginErrore, setLoginErrore] = useState("");
+  const [pannelloAccountAperto, setPannelloAccountAperto] = useState(false);
+  const [nuovaEmailAccount, setNuovaEmailAccount] = useState("");
+  const [nuovoPinAccount, setNuovoPinAccount] = useState("");
+  const [messaggioAccount, setMessaggioAccount] = useState("");
 
   const [tab, setTab] = useState("calendario");
   const [cellaSelezionata, setCellaSelezionata] = useState(null); // { empId, giorno }
@@ -384,11 +370,11 @@ export default function PlannerTurni() {
   }
 
   // Salva su localStorage a ogni modifica dei dati (non dello stato di sola UI), così
-  // aggiungere/eliminare un dipendente o assegnare un turno sopravvive al refresh della pagina.
+  // assegnare un turno o inviare una richiesta sopravvive al refresh della pagina. I
+  // dipendenti non sono più qui: vivono in Supabase (vedi l'effetto di autenticazione).
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        dipendenti,
         statoPerMese,
         turni,
         coperturaRegole,
@@ -404,7 +390,42 @@ export default function PlannerTurni() {
     } catch {
       // storage non disponibile (es. modalità privata/quota esaurita): l'app resta usabile in memoria
     }
-  }, [dipendenti, statoPerMese, turni, coperturaRegole, preferenze, richiesteSwap, richiesteAssenza, richiestePreassegnazione, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
+  }, [statoPerMese, turni, coperturaRegole, preferenze, richiesteSwap, richiesteAssenza, richiestePreassegnazione, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
+
+  // ---------- Autenticazione (Supabase) ----------
+
+  // Carica tutti i profili (condivisi tra tutta la squadra: servono per il calendario,
+  // per le liste "con chi vuoi scambiare", ecc.) e li mappa nella forma camelCase usata
+  // dal resto dell'app.
+  async function ricaricaDipendenti() {
+    const { data, error } = await supabase.from("profiles").select("*").order("created_at");
+    if (error) {
+      console.error("Errore caricamento profili:", error);
+      return [];
+    }
+    const profili = data.map(profiloDaRiga);
+    setDipendenti(profili);
+    return profili;
+  }
+
+  useEffect(() => {
+    if (!supabase) {
+      setSessionePronta(true);
+      return;
+    }
+    const { data: sottoscrizione } = supabase.auth.onAuthStateChange(async (_evento, sessione) => {
+      if (sessione?.user) {
+        const profili = await ricaricaDipendenti();
+        const mio = profili.find((p) => p.id === sessione.user.id);
+        setUtenteLoggato({ id: sessione.user.id, isAdmin: !!mio?.isAdmin, email: sessione.user.email });
+      } else {
+        setUtenteLoggato(null);
+        setDipendenti([]);
+      }
+      setSessionePronta(true);
+    });
+    return () => sottoscrizione.subscription.unsubscribe();
+  }, []);
 
   const numGiorni = giorniDelMese(anno, mese);
   const giorniArray = Array.from({ length: numGiorni }, (_, i) => i + 1);
@@ -416,28 +437,60 @@ export default function PlannerTurni() {
 
   // ---------- Login ----------
 
-  function handleLogin() {
-    const emp = dipendenti.find((d) => d.id === Number(loginEmpId));
-    if (!emp) {
-      setLoginErrore("Seleziona un dipendente.");
+  async function handleLogin() {
+    if (!supabase) {
+      setLoginErrore("App non collegata al backend: contatta l'amministratore.");
       return;
     }
-    if (emp.pin !== loginPin) {
-      setLoginErrore("PIN errato.");
+    if (!loginEmail.trim() || !loginPin) {
+      setLoginErrore("Inserisci email e PIN.");
       return;
     }
     setLoginErrore("");
-    setUtenteLoggato({ id: emp.id, isAdmin: emp.tipo === "direttore" || emp.tipo === "fom" });
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail.trim(), password: loginPin });
+    if (error) {
+      setLoginErrore("Email o PIN errati.");
+      return;
+    }
+    setLoginPin("");
     setTab("calendario");
   }
 
-  function handleLogout() {
-    setUtenteLoggato(null);
-    setLoginEmpId("");
+  async function handleLogout() {
+    await supabase?.auth.signOut();
+    setLoginEmail("");
     setLoginPin("");
+    setPannelloAccountAperto(false);
   }
 
   const isAdmin = utenteLoggato?.isAdmin;
+
+  // ---------- Account personale (self-service) ----------
+
+  async function aggiornaEmailAccount() {
+    if (!nuovaEmailAccount.trim()) return;
+    const { error } = await supabase.auth.updateUser({ email: nuovaEmailAccount.trim() });
+    if (error) {
+      setMessaggioAccount(`Errore: ${error.message}`);
+      return;
+    }
+    setMessaggioAccount("Controlla la tua nuova casella email per confermare il cambio.");
+    setNuovaEmailAccount("");
+  }
+
+  async function aggiornaPinAccount() {
+    if (nuovoPinAccount.length < 4) {
+      setMessaggioAccount("Il PIN deve avere almeno 4 caratteri (Supabase può richiederne di più).");
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: nuovoPinAccount });
+    if (error) {
+      setMessaggioAccount(`Errore: ${error.message}`);
+      return;
+    }
+    setMessaggioAccount("PIN aggiornato.");
+    setNuovoPinAccount("");
+  }
 
   // ---------- Gestione turni ----------
 
@@ -1415,6 +1468,14 @@ export default function PlannerTurni() {
 
   // ---------- Login screen ----------
 
+  if (!sessionePronta) {
+    return (
+      <div className="planner-turni-app" style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <style>{GLOBAL_STYLE}</style>
+      </div>
+    );
+  }
+
   if (!utenteLoggato) {
     return (
       <div className="planner-turni-app" style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", boxSizing: "border-box" }}>
@@ -1422,46 +1483,56 @@ export default function PlannerTurni() {
         <div style={{ ...styles.card, width: "100%", maxWidth: "340px", boxSizing: "border-box", textAlign: "center" }}>
           <img src={logoPlannerTurni} alt="Planner Turni" style={{ width: "100%", maxWidth: "280px", height: "auto", margin: "0 auto 18px" }} />
           <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: 0, marginBottom: "20px" }}>
-            Bozza dimostrativa — seleziona il tuo nome e inserisci il PIN di prova.
+            Accedi con l'email e il PIN che ti ha fornito l'amministratore.
           </p>
           <div style={{ marginBottom: "12px", textAlign: "left" }}>
-            <label style={styles.label}>Dipendente</label>
-            <select
+            <label style={styles.label}>Email</label>
+            <input
               style={styles.input}
-              value={loginEmpId}
-              onChange={(e) => setLoginEmpId(e.target.value)}
-            >
-              <option value="">Seleziona...</option>
-              {dipendenti.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.cognome} {d.nome} {(d.tipo === "direttore" || d.tipo === "fom") ? "(admin)" : ""}
-                </option>
-              ))}
-            </select>
+              type="email"
+              autoComplete="username"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              placeholder="nome@esempio.it"
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+            />
           </div>
           <div style={{ marginBottom: "16px", textAlign: "left" }}>
             <label style={styles.label}>PIN</label>
             <input
               style={styles.input}
               type="password"
+              autoComplete="current-password"
               value={loginPin}
               onChange={(e) => setLoginPin(e.target.value)}
-              placeholder="es. 1111"
+              placeholder="il tuo PIN"
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
             />
           </div>
           {loginErrore && <p style={{ color: COLORI.avvisoTesto, fontSize: "12px" }}>{loginErrore}</p>}
           <button style={{ ...styles.button, width: "100%" }} onClick={handleLogin}>
             Entra
           </button>
-          <p style={{ fontSize: "10.5px", color: COLORI.muted, marginTop: "16px", lineHeight: 1.6 }}>
-            PIN di prova: 1111 (Matteo, Direttore/admin), 4444 (Chiara, FOM/admin), 2222 (Ana Beatrice), 3333 (Rima), 5555 (Francesco), 6666 (Omar), 7777 (Romana), 8888 (Raoul), 9999 (Kevin), 1010 (Constantin).
-          </p>
         </div>
       </div>
     );
   }
 
   const empCorrente = dipendenti.find((d) => d.id === utenteLoggato.id);
+
+  if (!empCorrente) {
+    return (
+      <div className="planner-turni-app" style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", boxSizing: "border-box" }}>
+        <style>{GLOBAL_STYLE}</style>
+        <div style={{ ...styles.card, width: "100%", maxWidth: "340px", boxSizing: "border-box", textAlign: "center" }}>
+          <p style={{ fontSize: "13px", color: COLORI.ink }}>
+            Il tuo account esiste ma non ha ancora un profilo dipendente collegato. Contatta l'amministratore.
+          </p>
+          <button style={{ ...styles.buttonSecondary, marginTop: "14px" }} onClick={handleLogout}>Esci</button>
+        </div>
+      </div>
+    );
+  }
 
   const notifiche = calcolaNotifiche({ empCorrente, isAdmin, richiesteSwap, richiesteAssenza, richiestePreassegnazione, dipendenti });
   const idNotificheLette = new Set(notificheLette[empCorrente?.id] ?? []);
@@ -1542,6 +1613,61 @@ export default function PlannerTurni() {
                         <span>{n.testo}</span>
                       </div>
                     ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => { setPannelloAccountAperto((prev) => !prev); setMessaggioAccount(""); }}
+              title="Il mio account"
+              style={styles.iconBtn}
+            >
+              <IconIngranaggio dimensione={19} colore={COLORI.muted} />
+            </button>
+            {pannelloAccountAperto && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setPannelloAccountAperto(false)} />
+                <div style={styles.pannelloNotifiche(isMobile)}>
+                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 10px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    Il mio account
+                  </div>
+                  <p style={{ fontSize: "12px", color: COLORI.muted, padding: "0 8px", marginBottom: "10px" }}>
+                    Email attuale: <strong style={{ color: COLORI.ink }}>{utenteLoggato.email}</strong>
+                  </p>
+                  <div style={{ padding: "0 8px", marginBottom: "10px" }}>
+                    <label style={styles.label}>Nuova email</label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        type="email"
+                        style={styles.input}
+                        value={nuovaEmailAccount}
+                        onChange={(e) => setNuovaEmailAccount(e.target.value)}
+                        placeholder="nuova@email.it"
+                      />
+                      <button type="button" style={styles.buttonSecondary} onClick={aggiornaEmailAccount}>Salva</button>
+                    </div>
+                  </div>
+                  <div style={{ padding: "0 8px", marginBottom: "10px" }}>
+                    <label style={styles.label}>Nuovo PIN</label>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        type="password"
+                        style={styles.input}
+                        value={nuovoPinAccount}
+                        onChange={(e) => setNuovoPinAccount(e.target.value)}
+                        placeholder="nuovo PIN"
+                      />
+                      <button type="button" style={styles.buttonSecondary} onClick={aggiornaPinAccount}>Salva</button>
+                    </div>
+                  </div>
+                  {messaggioAccount && (
+                    <p style={{ fontSize: "12px", color: messaggioAccount.startsWith("Errore") ? COLORI.avvisoTesto : COLORI.tealScuro, padding: "0 8px" }}>
+                      {messaggioAccount}
+                    </p>
                   )}
                 </div>
               </>
@@ -1927,7 +2053,7 @@ export default function PlannerTurni() {
         )}
 
         {tab === "dipendenti" && isAdmin && (
-          <SchedaDipendenti dipendenti={dipendenti} turni={turni} onSalva={setDipendenti} styles={styles} />
+          <SchedaDipendenti dipendenti={dipendenti} turni={turni} onRicarica={ricaricaDipendenti} styles={styles} />
         )}
 
         {tab === "copertura" && isAdmin && (
@@ -2792,6 +2918,26 @@ function IconEsci({ dimensione = 19, colore = "currentColor", style }) {
   );
 }
 
+function IconIngranaggio({ dimensione = 19, colore = "currentColor", style }) {
+  return (
+    <svg
+      width={dimensione}
+      height={dimensione}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={colore}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 function AvatarDipendente({ d, dimensione = 26 }) {
   return (
     <span
@@ -2815,10 +2961,20 @@ function AvatarDipendente({ d, dimensione = 26 }) {
   );
 }
 
-function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
+function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
   const [bozza, setBozza] = useState(dipendenti);
-  const [nuovo, setNuovo] = useState({ cognome: "", nome: "", tipo: "diurno", pin: "", email: "" });
+  const [nuovo, setNuovo] = useState({ cognome: "", nome: "", tipo: "diurno", email: "", pin: "" });
   const [confermaEliminazione, setConfermaEliminazione] = useState(null); // id in attesa di conferma
+  const [salvando, setSalvando] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [erroreCreazione, setErroreCreazione] = useState("");
+
+  // Il componente non possiede più i dati: `dipendenti` arriva da Supabase (tramite il
+  // genitore) e può cambiare sotto i piedi (un altro admin modifica, o dopo un salvataggio
+  // proprio) — la bozza locale si riallinea quando cambia la fonte.
+  useEffect(() => {
+    setBozza(dipendenti);
+  }, [dipendenti]);
 
   const modificato = JSON.stringify(bozza) !== JSON.stringify(dipendenti);
 
@@ -2826,57 +2982,73 @@ function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
     setBozza((prev) => prev.map((x) => (x.id === id ? { ...x, [campo]: valore } : x)));
   }
 
-  function aggiungiDipendente() {
-    if (!nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.pin.trim()) return;
-    const nuovoId = bozza.length > 0 ? Math.max(...bozza.map((d) => d.id)) + 1 : 1;
-    const colore = COLORI_DIPENDENTE[(nuovoId - 1) % COLORI_DIPENDENTE.length];
+  // La creazione crea un vero account (Supabase Auth + riga profiles) tramite una Edge
+  // Function con privilegi elevati: il client non ha mai accesso diretto a quel livello.
+  async function creaDipendente() {
+    if (!nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.email.trim() || !nuovo.pin.trim()) return;
+    setCreando(true);
+    setErroreCreazione("");
     // FIX #3: rotationSlot stabile assegnato UNA VOLTA alla creazione — il primo intero
     // libero, non derivato dall'id né dalla posizione nell'array (che può cambiare).
     const rotationSlot = prossimoRotationSlotLibero(bozza);
-    setBozza((prev) => [
-      ...prev,
-      {
-        id: nuovoId,
+    const colore = COLORI_DIPENDENTE[bozza.length % COLORI_DIPENDENTE.length];
+    const { data, error } = await supabase.functions.invoke("create-employee", {
+      body: {
+        email: nuovo.email.trim(),
+        pin: nuovo.pin.trim(),
         cognome: nuovo.cognome.trim(),
         nome: nuovo.nome.trim(),
         tipo: nuovo.tipo,
-        riposoTipo: "rotante",
-        rotationSlot,
-        active: true,
         colore,
-        pin: nuovo.pin.trim(),
-        email: nuovo.email.trim(),
-        quotaFerieAnnua: QUOTA_FERIE_DEFAULT,
-        quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT,
+        rotationSlot,
+        riposoTipo: "rotante",
       },
-    ]);
-    setNuovo({ cognome: "", nome: "", tipo: "diurno", pin: "", email: "" });
+    });
+    setCreando(false);
+    if (error || data?.ok === false) {
+      setErroreCreazione(data?.error || error?.message || "Errore durante la creazione.");
+      return;
+    }
+    setNuovo({ cognome: "", nome: "", tipo: "diurno", email: "", pin: "" });
+    await onRicarica();
   }
 
   // FIX #10: l'eliminazione fisica resta disponibile solo per correggere errori (dipendente
   // aggiunto per sbaglio, zero turni storici) — se esiste anche un solo turno storico
   // collegato, l'eliminazione viene rifiutata e va usata "Disattiva" al suo posto.
-  function eliminaDipendente(id) {
+  // Nota: elimina la riga profilo; l'account di accesso resta (per ora) — servirà una
+  // seconda Edge Function per rimuoverlo del tutto, come per la creazione.
+  async function eliminaDipendente(id) {
     if (confermaEliminazione !== id) {
       setConfermaEliminazione(id);
       return;
     }
-    const esito = eliminaDipendenteDominio(bozza, turni, id);
-    if (!esito.ok) {
-      alert(esito.errore);
+    if (!puoEliminareDefinitivamente(turni, id)) {
+      alert("Questo dipendente ha turni storici collegati: non può essere eliminato definitivamente. Usa 'Disattiva' per rimuoverlo dalla rotazione mantenendo lo storico.");
       setConfermaEliminazione(null);
       return;
     }
-    setBozza(esito.dipendenti);
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    if (error) alert(`Errore: ${error.message}`);
     setConfermaEliminazione(null);
+    await onRicarica();
   }
 
   function toggleAttivo(id, attivoAttuale) {
     setBozza((prev) => (attivoAttuale ? disattivaDipendente(prev, id) : attivaDipendente(prev, id)));
   }
 
-  function salva() {
-    onSalva(bozza);
+  async function salva() {
+    setSalvando(true);
+    const originali = new Map(dipendenti.map((d) => [d.id, d]));
+    const cambiati = bozza.filter((d) => JSON.stringify(d) !== JSON.stringify(originali.get(d.id)));
+    const risultati = await Promise.all(
+      cambiati.map((d) => supabase.from("profiles").update(rigaDaProfiloParziale(d)).eq("id", d.id))
+    );
+    setSalvando(false);
+    const primoErrore = risultati.find((r) => r.error)?.error;
+    if (primoErrore) alert(`Errore nel salvataggio: ${primoErrore.message}`);
+    await onRicarica();
   }
 
   return (
@@ -2888,10 +3060,8 @@ function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Nome</th>
               <th style={styles.th}>Tipo</th>
-              <th style={styles.th}>Email</th>
               <th style={styles.th}>Riposo</th>
               <th style={styles.th}>Coppia fissa</th>
-              <th style={styles.th}>PIN</th>
               <th style={styles.th}>Stato</th>
               <th style={styles.th}></th>
             </tr>
@@ -2919,15 +3089,6 @@ function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
                   </select>
                 </td>
                 <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
-                  <input
-                    type="email"
-                    style={{ ...styles.input, width: "170px", textAlign: "center" }}
-                    value={d.email ?? ""}
-                    placeholder="email@esempio.it"
-                    onChange={(e) => aggiornaCampo(d.id, "email", e.target.value)}
-                  />
-                </td>
-                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
                   <select
                     style={styles.select}
                     value={d.riposoTipo ?? "rotante"}
@@ -2951,13 +3112,6 @@ function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
                   ) : (
                     <span style={{ color: COLORI.muted, fontSize: "12px" }}>—</span>
                   )}
-                </td>
-                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
-                  <input
-                    style={{ ...styles.input, width: "70px", textAlign: "center", fontFamily: "ui-monospace, monospace" }}
-                    value={d.pin}
-                    onChange={(e) => aggiornaCampo(d.id, "pin", e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  />
                 </td>
                 <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
                   <button
@@ -2990,8 +3144,11 @@ function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
       </div>
 
       <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: `1px solid ${COLORI.hairline}` }}>
-        <label style={styles.label}>Aggiungi dipendente</label>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "6px" }}>
+        <label style={styles.label}>Crea dipendente</label>
+        <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "2px", marginBottom: "6px" }}>
+          Crea un account vero e proprio: email e PIN andranno usati dal dipendente per accedere.
+        </p>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
           <input
             style={{ ...styles.input, width: "150px" }}
             placeholder="Cognome"
@@ -3024,16 +3181,21 @@ function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
             style={{ ...styles.input, width: "90px", fontFamily: "ui-monospace, monospace" }}
             placeholder="PIN"
             value={nuovo.pin}
-            onChange={(e) => setNuovo({ ...nuovo, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+            onChange={(e) => setNuovo({ ...nuovo, pin: e.target.value })}
           />
-          <button style={styles.button} disabled={!nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.pin.trim()} onClick={aggiungiDipendente}>
-            Aggiungi
+          <button
+            style={styles.button}
+            disabled={creando || !nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.email.trim() || !nuovo.pin.trim()}
+            onClick={creaDipendente}
+          >
+            {creando ? "Creazione…" : "Crea"}
           </button>
         </div>
+        {erroreCreazione && <p style={{ color: COLORI.avvisoTesto, fontSize: "12px", marginTop: "8px" }}>{erroreCreazione}</p>}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "18px" }}>
-        <PulsanteSalva onSalva={salva} disabled={!modificato} styles={styles} />
+        <PulsanteSalva onSalva={salva} disabled={!modificato || salvando} styles={styles} testo={salvando ? "Salvataggio…" : "Salva"} />
       </div>
       <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "12px" }}>
         Bozza: il riposo "Fisso" ora è impostabile per chiunque, non solo Direttore/FOM — è un flag accanto a ciascun dipendente che indica se partecipa alla rotazione o ha una coppia di riposo fissa (scegli solo il giorno di inizio della coppia, es. "Sab + Dom"). "Rotante" (il default) resta la stessa regola di sempre: coppia di 2 giorni consecutivi che scala indietro di 1 ogni mese.
