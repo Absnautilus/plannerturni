@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { email, pin, cognome, nome, tipo, colore, rotationSlot, riposoTipo } = body;
+    const { email, pin, cognome, nome, tipo, colore, rotationSlot, riposoTipo, isAdmin } = body;
     if (!email || !pin || !cognome || !nome || !tipo) {
       throw new Error("Email, PIN, cognome, nome e tipo sono obbligatori.");
     }
@@ -63,6 +63,7 @@ Deno.serve(async (req) => {
       colore,
       rotation_slot: rotationSlot ?? null,
       riposo_tipo: riposoTipo ?? "rotante",
+      is_admin: !!isAdmin,
     });
     if (insertError) {
       // Il profilo non si è creato: non lasciare un account di login orfano senza profilo.

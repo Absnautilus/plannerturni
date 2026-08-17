@@ -2963,7 +2963,7 @@ function AvatarDipendente({ d, dimensione = 26 }) {
 
 function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
   const [bozza, setBozza] = useState(dipendenti);
-  const [nuovo, setNuovo] = useState({ cognome: "", nome: "", tipo: "diurno", email: "", pin: "" });
+  const [nuovo, setNuovo] = useState({ cognome: "", nome: "", tipo: "diurno", email: "", pin: "", isAdmin: false });
   const [confermaEliminazione, setConfermaEliminazione] = useState(null); // id in attesa di conferma
   const [salvando, setSalvando] = useState(false);
   const [creando, setCreando] = useState(false);
@@ -3002,6 +3002,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
         colore,
         rotationSlot,
         riposoTipo: "rotante",
+        isAdmin: nuovo.isAdmin,
       },
     });
     setCreando(false);
@@ -3009,7 +3010,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
       setErroreCreazione(data?.error || error?.message || "Errore durante la creazione.");
       return;
     }
-    setNuovo({ cognome: "", nome: "", tipo: "diurno", email: "", pin: "" });
+    setNuovo({ cognome: "", nome: "", tipo: "diurno", email: "", pin: "", isAdmin: false });
     await onRicarica();
   }
 
@@ -3062,6 +3063,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
               <th style={styles.th}>Tipo</th>
               <th style={styles.th}>Riposo</th>
               <th style={styles.th}>Coppia fissa</th>
+              <th style={styles.th}>Admin</th>
               <th style={styles.th}>Stato</th>
               <th style={styles.th}></th>
             </tr>
@@ -3112,6 +3114,14 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
                   ) : (
                     <span style={{ color: COLORI.muted, fontSize: "12px" }}>—</span>
                   )}
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <input
+                    type="checkbox"
+                    checked={!!d.isAdmin}
+                    onChange={(e) => aggiornaCampo(d.id, "isAdmin", e.target.checked)}
+                    title="Dipendente admin: può gestire dipendenti, turni e regole per tutta la squadra"
+                  />
                 </td>
                 <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
                   <button
@@ -3183,6 +3193,14 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
             value={nuovo.pin}
             onChange={(e) => setNuovo({ ...nuovo, pin: e.target.value })}
           />
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: COLORI.ink, paddingBottom: "10px" }}>
+            <input
+              type="checkbox"
+              checked={nuovo.isAdmin}
+              onChange={(e) => setNuovo({ ...nuovo, isAdmin: e.target.checked })}
+            />
+            Admin
+          </label>
           <button
             style={styles.button}
             disabled={creando || !nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.email.trim() || !nuovo.pin.trim()}
