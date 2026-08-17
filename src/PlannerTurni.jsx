@@ -590,7 +590,11 @@ export default function PlannerTurni() {
         setMessaggioAccount("Permesso per le notifiche negato dal browser.");
         return;
       }
-      const registrazione = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.register("/sw.js");
+      // pushManager.subscribe() vuole un service worker già ATTIVO: subito dopo
+      // register() potrebbe essere ancora in fase di installazione. "ready" aspetta
+      // che lo sia davvero, altrimenti si ottiene "requires an active service worker".
+      const registrazione = await navigator.serviceWorker.ready;
       const subscription = await registrazione.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY),
