@@ -449,7 +449,7 @@ export default function PlannerTurni() {
     setLoginErrore("");
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail.trim(), password: loginPin });
     if (error) {
-      setLoginErrore("Email o PIN errati.");
+      setLoginErrore(`Errore: ${error.message}`);
       return;
     }
     setLoginPin("");
