@@ -24,6 +24,7 @@ import {
   applicaScambio,
 } from "./domain/swapWorkflow.js";
 import { haStoricoTurni, disattivaDipendente, attivaDipendente, eliminaDipendente as eliminaDipendenteDominio } from "./domain/employeeLifecycle.js";
+import { generaICS } from "./domain/icsExport.js";
 import logoPlannerTurni from "./assets/logo-planner-turni.png";
 import logoIcona from "./assets/logo-icon.png";
 
@@ -861,6 +862,32 @@ export default function PlannerTurni() {
       const r = richiestePreassegnazione.find((r) => r.id === id);
       if (r) applicaPreassegnazioneTurno(r.empId, r.giorno, r.anno, r.mese, r.turno);
     }
+  }
+
+  // ---------- Export calendario (.ics) ----------
+
+  // Esporta i turni di un intero anno solare del dipendente in un file .ics scaricabile,
+  // importabile in Google Calendar / Outlook / Proton Calendar / Apple Calendar. Non è un
+  // abbonamento che si aggiorna da solo: va riscaricato quando i turni cambiano.
+  function esportaCalendarioICS(dipendente, annoTarget) {
+    const eventiTurno = [];
+    for (let m = 0; m < 12; m++) {
+      const numGiorniMese = giorniDelMese(annoTarget, m);
+      for (let g = 1; g <= numGiorniMese; g++) {
+        const t = turni[keyTurno(dipendente.id, annoTarget, m, g)];
+        if (t) eventiTurno.push({ anno: annoTarget, mese: m, giorno: g, code: t.code });
+      }
+    }
+    const ics = generaICS(dipendente, eventiTurno);
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `turni-${dipendente.cognome}-${dipendente.nome}-${annoTarget}.ics`.replace(/\s+/g, "-");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // ---------- Preferenze ----------
@@ -1855,6 +1882,14 @@ export default function PlannerTurni() {
                   →
                 </button>
               </div>
+              <button
+                type="button"
+                style={styles.buttonSecondary}
+                onClick={() => esportaCalendarioICS(empCorrente, annoMiei)}
+                title="Scarica i turni di questo anno in un file .ics da importare in Google/Outlook/Proton Calendar"
+              >
+                Esporta calendario ({annoMiei}) ⬇
+              </button>
             </div>
 
             <div style={styles.grigliaMensile}>
