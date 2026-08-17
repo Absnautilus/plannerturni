@@ -18,6 +18,7 @@ export function profiloDaRiga(riga) {
     quotaPermessiOreAnnue: riga.quota_permessi_ore_annue,
     isAdmin: riga.is_admin,
     membroSquadra: riga.membro_squadra,
+    ordine: riga.ordine,
   };
 }
 
@@ -39,6 +40,7 @@ export function rigaDaProfiloParziale(patch) {
     quotaPermessiOreAnnue: "quota_permessi_ore_annue",
     isAdmin: "is_admin",
     membroSquadra: "membro_squadra",
+    ordine: "ordine",
   };
   const riga = {};
   Object.entries(patch).forEach(([chiave, valore]) => {

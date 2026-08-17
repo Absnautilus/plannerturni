@@ -398,7 +398,7 @@ export default function PlannerTurni() {
   // per le liste "con chi vuoi scambiare", ecc.) e li mappa nella forma camelCase usata
   // dal resto dell'app.
   async function ricaricaDipendenti() {
-    const { data, error } = await supabase.from("profiles").select("*").order("created_at");
+    const { data, error } = await supabase.from("profiles").select("*").order("ordine", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true });
     if (error) {
       console.error("Errore caricamento profili:", error);
       return [];
@@ -2974,6 +2974,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
   const [salvando, setSalvando] = useState(false);
   const [creando, setCreando] = useState(false);
   const [erroreCreazione, setErroreCreazione] = useState("");
+  const [trascinato, setTrascinato] = useState(null); // indice della riga in trascinamento
 
   // Il componente non possiede più i dati: `dipendenti` arriva da Supabase (tramite il
   // genitore) e può cambiare sotto i piedi (un altro admin modifica, o dopo un salvataggio
@@ -2986,6 +2987,19 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
 
   function aggiornaCampo(id, campo, valore) {
     setBozza((prev) => prev.map((x) => (x.id === id ? { ...x, [campo]: valore } : x)));
+  }
+
+  // Trascina una riga dalla posizione "da" alla posizione "a": riassegna "ordine" in
+  // sequenza a tutta la bozza, così lo spostamento si salva col normale pulsante Salva
+  // (viene rilevato come modifica su ogni riga la cui posizione è cambiata).
+  function riordina(da, a) {
+    if (da === a) return;
+    setBozza((prev) => {
+      const nuovo = [...prev];
+      const [spostato] = nuovo.splice(da, 1);
+      nuovo.splice(a, 0, spostato);
+      return nuovo.map((d, i) => ({ ...d, ordine: i }));
+    });
   }
 
   // La creazione crea un vero account (Supabase Auth + riga profiles) tramite una Edge
@@ -3065,6 +3079,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
         <table style={{ ...styles.table, fontSize: "13px", marginTop: "12px" }}>
           <thead>
             <tr>
+              <th style={styles.th}></th>
               <th style={{ ...styles.th, textAlign: "left" }}>Nome</th>
               <th style={styles.th}>Tipo</th>
               <th style={styles.th}>Riposo</th>
@@ -3075,10 +3090,21 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
             </tr>
           </thead>
           <tbody>
-            {bozza.map((d) => {
+            {bozza.map((d, indice) => {
               const attivo = d.active !== false;
               return (
-              <tr key={d.id} style={{ opacity: attivo ? 1 : 0.5 }}>
+              <tr
+                key={d.id}
+                draggable
+                onDragStart={() => setTrascinato(indice)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); if (trascinato !== null) riordina(trascinato, indice); setTrascinato(null); }}
+                onDragEnd={() => setTrascinato(null)}
+                style={{ opacity: trascinato === indice ? 0.4 : attivo ? 1 : 0.5 }}
+              >
+                <td style={{ padding: "9px 4px", borderBottom: `1px solid ${COLORI.hairline}`, textAlign: "center", cursor: "grab", color: COLORI.muted, fontSize: "14px" }} title="Trascina per riordinare">
+                  ⠿
+                </td>
                 <td style={{ padding: "9px 10px", borderBottom: `1px solid ${COLORI.hairline}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                     <AvatarDipendente d={d} dimensione={28} />
@@ -3127,6 +3153,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
                     checked={!!d.isAdmin}
                     onChange={(e) => aggiornaCampo(d.id, "isAdmin", e.target.checked)}
                     title="Dipendente admin: può gestire dipendenti, turni e regole per tutta la squadra"
+                    style={{ accentColor: COLORI.teal, width: "16px", height: "16px", cursor: "pointer" }}
                   />
                 </td>
                 <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
@@ -3204,6 +3231,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
               type="checkbox"
               checked={nuovo.isAdmin}
               onChange={(e) => setNuovo({ ...nuovo, isAdmin: e.target.checked })}
+              style={{ accentColor: COLORI.teal, width: "16px", height: "16px", cursor: "pointer" }}
             />
             Admin
           </label>
