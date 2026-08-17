@@ -320,7 +320,6 @@ export default function PlannerTurni() {
   const [loginPin, setLoginPin] = useState("");
   const [loginErrore, setLoginErrore] = useState("");
   const [pannelloAccountAperto, setPannelloAccountAperto] = useState(false);
-  const [menuMobileAperto, setMenuMobileAperto] = useState(false);
   const [nuovaEmailAccount, setNuovaEmailAccount] = useState("");
   const [nuovoPinAccount, setNuovoPinAccount] = useState("");
   const [messaggioAccount, setMessaggioAccount] = useState("");
@@ -1115,11 +1114,11 @@ export default function PlannerTurni() {
     header: {
       background: "transparent",
       color: COLORI.ink,
-      padding: isMobile ? "16px 14px 4px" : "26px 28px 6px",
+      padding: isMobile ? "14px 14px" : "26px 28px 6px",
       display: "flex",
       justifyContent: "space-between",
-      alignItems: "flex-start",
-      flexWrap: "wrap",
+      alignItems: isMobile ? "center" : "flex-start",
+      flexWrap: isMobile ? "nowrap" : "wrap",
       gap: "12px",
       maxWidth: "1180px",
       margin: "0 auto",
@@ -1180,50 +1179,6 @@ export default function PlannerTurni() {
       letterSpacing: "0.01em",
       whiteSpace: "nowrap",
       flexShrink: 0,
-    }),
-    hamburgerBtn: {
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      width: "100%",
-      border: "none",
-      background: COLORI.inkDark,
-      color: "#FFFFFF",
-      padding: "12px 16px",
-      borderRadius: "12px",
-      cursor: "pointer",
-      fontSize: "13.5px",
-      fontWeight: 700,
-      fontFamily: "inherit",
-      boxSizing: "border-box",
-    },
-    menuMobilePannello: {
-      position: "fixed",
-      top: "112px",
-      left: "12px",
-      right: "12px",
-      background: COLORI.card,
-      borderRadius: "14px",
-      boxShadow: "0 12px 32px rgba(28,30,46,0.18)",
-      zIndex: 50,
-      padding: "8px",
-      maxHeight: "70vh",
-      overflowY: "auto",
-    },
-    menuMobileVoce: (active) => ({
-      display: "block",
-      width: "100%",
-      textAlign: "left",
-      border: "none",
-      background: active ? COLORI.mist : "transparent",
-      color: COLORI.ink,
-      padding: "12px 14px",
-      borderRadius: "10px",
-      cursor: "pointer",
-      fontSize: "14px",
-      fontWeight: active ? 700 : 500,
-      fontFamily: "inherit",
-      marginBottom: "2px",
     }),
     container: { padding: isMobile ? "0 14px 28px" : "0 28px 40px", maxWidth: "1180px", margin: "0 auto" },
     card: {
@@ -1745,10 +1700,12 @@ export default function PlannerTurni() {
       <div style={styles.header}>
         <div style={styles.logoRow}>
           <img src={logoIcona} alt="Planner Turni" style={{ width: isMobile ? "34px" : "44px", height: isMobile ? "34px" : "44px", flexShrink: 0 }} />
-          <div>
-            <h1 style={styles.title}>Ciao, {empCorrente?.nome?.split(" ")[0]}</h1>
-            <div style={styles.subtitle}>{TIPI_DIPENDENTE[empCorrente?.tipo]?.label} · {nomeMese}</div>
-          </div>
+          {!isMobile && (
+            <div>
+              <h1 style={styles.title}>Ciao, {empCorrente?.nome?.split(" ")[0]}</h1>
+              <div style={styles.subtitle}>{TIPI_DIPENDENTE[empCorrente?.tipo]?.label} · {nomeMese}</div>
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px" }}>
           <div
@@ -1886,37 +1843,11 @@ export default function PlannerTurni() {
       </div>
 
       <div style={styles.navWrapper}>
-        {isMobile ? (
-          <div style={{ position: "relative" }}>
-            <button type="button" style={styles.hamburgerBtn} onClick={() => setMenuMobileAperto((v) => !v)}>
-              <IconHamburger dimensione={18} colore="#FFFFFF" />
-              {vociNav.find((v) => v.id === tab)?.label ?? "Menu"}
-            </button>
-            {menuMobileAperto && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setMenuMobileAperto(false)} />
-                <div style={styles.menuMobilePannello}>
-                  {vociNav.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      style={styles.menuMobileVoce(tab === v.id)}
-                      onClick={() => { setTab(v.id); setMenuMobileAperto(false); }}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="ptn-nav-scroll" style={styles.nav}>
-            {vociNav.map((v) => (
-              <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => setTab(v.id)}>{v.label}</button>
-            ))}
-          </div>
-        )}
+        <div className="ptn-nav-scroll" style={styles.nav}>
+          {vociNav.map((v) => (
+            <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => setTab(v.id)}>{v.label}</button>
+          ))}
+        </div>
       </div>
 
       <div style={styles.container}>
@@ -3164,26 +3095,6 @@ function IconIngranaggio({ dimensione = 19, colore = "currentColor", style }) {
   );
 }
 
-function IconHamburger({ dimensione = 20, colore = "currentColor", style }) {
-  return (
-    <svg
-      width={dimensione}
-      height={dimensione}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={colore}
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ display: "inline-block", flexShrink: 0, ...style }}
-      aria-hidden="true"
-    >
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
 
 function AvatarDipendente({ d, dimensione = 26 }) {
   return (
