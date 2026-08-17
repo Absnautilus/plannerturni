@@ -465,6 +465,12 @@ export default function PlannerTurni() {
 
   const isAdmin = utenteLoggato?.isAdmin;
 
+  // Un account può esistere solo per amministrare (es. il titolare) senza far parte
+  // della squadra operativa: non deve comparire in calendario, rotazioni, cambi turno
+  // o ferie/permessi. `dipendenti` resta la lista completa (serve per il login e per
+  // la gestione in "Dipendenti"); questa è la vista da usare ovunque si parli di turni.
+  const dipendentiOperativi = dipendenti.filter((d) => d.membroSquadra !== false);
+
   // ---------- Account personale (self-service) ----------
 
   async function aggiornaEmailAccount() {
@@ -625,7 +631,7 @@ export default function PlannerTurni() {
     // generateSchedule() (src/domain/assignment.js), testato in isolamento. Qui il componente
     // si limita a raccogliere l'input, chiamarlo, e applicare il risultato allo stato React.
     const risultato = generateSchedule({
-      dipendenti,
+      dipendenti: dipendentiOperativi,
       turniEsistenti: turni,
       anno,
       mese,
@@ -659,9 +665,9 @@ export default function PlannerTurni() {
         const meseTarget = (mese + offset) % 12;
         const annoTarget = anno + Math.floor((mese + offset) / 12);
         const giorniTarget = giorniDelMese(annoTarget, meseTarget);
-        const offsetRiposoPerId = calcolaOffsetRiposoPerMese(dipendenti, annoTarget, meseTarget);
+        const offsetRiposoPerId = calcolaOffsetRiposoPerMese(dipendentiOperativi, annoTarget, meseTarget);
 
-        dipendenti.forEach((d) => {
+        dipendentiOperativi.forEach((d) => {
           const offsetRiposo = offsetRiposoPerId[d.id];
           for (let giorno = 1; giorno <= giorniTarget; giorno++) {
             const k = keyTurno(d.id, annoTarget, meseTarget, giorno);
@@ -1797,7 +1803,7 @@ export default function PlannerTurni() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dipendenti.map((d) => (
+                    {dipendentiOperativi.map((d) => (
                       <tr key={d.id}>
                         <td style={{ ...styles.tdEmp, borderLeft: "none" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1954,7 +1960,7 @@ export default function PlannerTurni() {
                     </tr>
                   </thead>
                   <tbody>
-                    {dipendenti.map((d) => (
+                    {dipendentiOperativi.map((d) => (
                       <tr key={d.id}>
                         <td style={{ padding: "8px 10px", borderBottom: `1px solid ${COLORI.hairline}` }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -2201,7 +2207,7 @@ export default function PlannerTurni() {
             <div style={{ marginTop: "14px" }}>
               <RichiediSwapForm
                 empCorrente={empCorrente}
-                dipendenti={dipendenti}
+                dipendenti={dipendentiOperativi}
                 annoCorrente={anno}
                 meseCorrente={mese}
                 turni={turni}
@@ -2309,7 +2315,7 @@ export default function PlannerTurni() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dipendenti.filter((d) => isAdmin || d.id === empCorrente.id).map((d) => {
+                  {dipendentiOperativi.filter((d) => isAdmin || d.id === empCorrente.id).map((d) => {
                     const r = recapFeriePermessi[d.id] || {};
                     return (
                       <tr key={d.id}>
@@ -2341,7 +2347,7 @@ export default function PlannerTurni() {
                 : "Proponi di esserti assegnato un turno specifico (o un giorno libero) in un giorno specifico, anche di un mese diverso da quello visualizzato nel calendario. Resta soggetto a conferma dell'admin (Direttore o FOM); una volta accettata, il turno viene bloccato automaticamente (🔒 Do Not Move)."}
             </p>
             <div style={{ marginTop: "14px" }}>
-              <RichiediPreassegnazioneForm empCorrente={empCorrente} dipendenti={dipendenti} isAdmin={isAdmin} annoCorrente={anno} meseCorrente={mese} onRichiedi={richiediPreassegnazione} styles={styles} />
+              <RichiediPreassegnazioneForm empCorrente={empCorrente} dipendenti={dipendentiOperativi} isAdmin={isAdmin} annoCorrente={anno} meseCorrente={mese} onRichiedi={richiediPreassegnazione} styles={styles} />
             </div>
             <h4 style={{ fontSize: "13px", color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em", marginTop: "20px" }}>
               {isAdmin ? "Tutte le richieste" : "Le mie richieste"}

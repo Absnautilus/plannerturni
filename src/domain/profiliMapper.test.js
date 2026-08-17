@@ -17,6 +17,7 @@ describe("profiloDaRiga", () => {
       quota_ferie_annua: 26,
       quota_permessi_ore_annue: 88,
       is_admin: false,
+      membro_squadra: true,
     };
     expect(profiloDaRiga(riga)).toEqual({
       id: "abc-123",
@@ -32,6 +33,7 @@ describe("profiloDaRiga", () => {
       quotaFerieAnnua: 26,
       quotaPermessiOreAnnue: 88,
       isAdmin: false,
+      membroSquadra: true,
     });
   });
 
