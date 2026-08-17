@@ -2059,7 +2059,7 @@ export default function PlannerTurni() {
         )}
 
         {tab === "dipendenti" && isAdmin && (
-          <SchedaDipendenti dipendenti={dipendenti} turni={turni} onRicarica={ricaricaDipendenti} styles={styles} />
+          <SchedaDipendenti dipendenti={dipendentiOperativi} turni={turni} onRicarica={ricaricaDipendenti} styles={styles} />
         )}
 
         {tab === "copertura" && isAdmin && (
