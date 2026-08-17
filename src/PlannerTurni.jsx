@@ -1,0 +1,3202 @@
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { TIPI_TURNO, CODICI_MATTINA, CODICI_POMERIGGIO, categoriaTurno } from "./constants/shifts.js";
+import { TIPI_DIPENDENTE, turniAmmessiDipendente } from "./constants/employeeTypes.js";
+import {
+  GIORNI_SETTIMANA,
+  giorniDelMese,
+  giornoSettimana,
+  nomeGiorno,
+  eWeekend,
+  formattaData,
+  giornoPrecedente,
+  meseSuccessivo,
+  mesePrecedente,
+} from "./domain/dates.js";
+import { calcolaOffsetRiposoPerMese, prossimoRotationSlotLibero } from "./domain/restRotation.js";
+import { canModifyShift, eProtettoDaRigenerazione } from "./domain/shiftGuards.js";
+import { generateSchedule } from "./domain/assignment.js";
+import {
+  STATI_SWAP,
+  accettaDaCollega,
+  rifiutaDaCollega,
+  approvaAdmin as approvaSwapAdmin,
+  rifiutaAdmin as rifiutaSwapAdmin,
+  applicaScambio,
+} from "./domain/swapWorkflow.js";
+import { haStoricoTurni, disattivaDipendente, attivaDipendente, eliminaDipendente as eliminaDipendenteDominio } from "./domain/employeeLifecycle.js";
+import logoPlannerTurni from "./assets/logo-planner-turni.png";
+import logoIcona from "./assets/logo-icon.png";
+
+// ---------- Font + stile globale (hover/focus/interazioni) ----------
+
+const GLOBAL_STYLE = `
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap');
+
+  html, body {
+    overflow-x: hidden;
+  }
+  .planner-turni-app,
+  .planner-turni-app *,
+  .planner-turni-app *::before,
+  .planner-turni-app *::after {
+    box-sizing: border-box;
+  }
+  .ptn-nav-scroll {
+    scrollbar-width: none;
+  }
+  .ptn-nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .planner-turni-app button:not(:disabled) {
+    transition: filter 0.12s ease, transform 0.05s ease;
+  }
+  .planner-turni-app button:not(:disabled):hover {
+    filter: brightness(0.93);
+  }
+  .planner-turni-app button:not(:disabled):active {
+    transform: translateY(1px);
+  }
+  .planner-turni-app button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .planner-turni-app select,
+  .planner-turni-app input {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .planner-turni-app select:hover,
+  .planner-turni-app input:hover {
+    border-color: #A9825A;
+  }
+  .planner-turni-app select:focus,
+  .planner-turni-app input:focus {
+    outline: none;
+    border-color: #1F6F78;
+    box-shadow: 0 0 0 3px rgba(31, 111, 120, 0.12);
+  }
+  .planner-turni-app tbody tr:hover td {
+    background: rgba(31, 111, 120, 0.035);
+  }
+  .planner-turni-app td.cella-turno-editabile:hover {
+    filter: brightness(0.9);
+    cursor: pointer;
+  }
+  .planner-turni-app ::selection {
+    background: rgba(31, 111, 120, 0.2);
+  }
+`;
+
+// ---------- Design tokens ----------
+
+const COLORI = {
+  inkDark: "#16182B",       // pillola nav scura
+  ink: "#1C1E2E",
+  muted: "#8A8FA3",
+  mist: "#EAECF9",          // sfondo pagina lavanda tenue
+  card: "#FFFFFF",
+  hairline: "#EDEFF7",
+  hairlineForte: "#DCDFF0",
+  teal: "#1C1E2E",          // pulsante primario = pillola scura, coerente con la nav
+  tealScuro: "#000000",
+  ottone: "#9C4FC7",
+  ottoneScuro: "#7B3B9E",
+  selezione: "#4C8DF0",
+  bozzaBg: "#FFF1D6",
+  bozzaTesto: "#8A6416",
+  definitivoBg: "#DFF6E8",
+  definitivoTesto: "#1E7A46",
+  avvisoBg: "#FDE8E8",
+  avvisoBordo: "#F3B9B9",
+  avvisoTesto: "#B23A3A",
+};
+
+// Restituisce il testo (bianco o quasi-nero) più leggibile su uno sfondo del colore indicato
+function testoContrastante(hex) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const luminanza = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminanza > 0.62 ? "#1C1E2E" : "#FFFFFF";
+}
+
+
+const COLORI_DIPENDENTE = [
+  "#8A6A3A", "#6B5B78", "#2E6B78", "#5C7A5E", "#7A5C4A",
+  "#4A6670", "#9A7B4E", "#5E6B4A", "#6B4E5E", "#2A2E3A",
+];
+
+const MESI_NOMI = [
+  "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+  "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
+];
+
+const COPERTURA_DEFAULT = { C1: 1, C2: 1, A1: 1, A2: 1, N: 1 };
+
+// Quote annue di default (bozza: valori indicativi, da confermare/rendere modificabili in seguito)
+const QUOTA_FERIE_DEFAULT = 26; // giorni
+const QUOTA_PERMESSI_ORE_DEFAULT = 88; // ore
+
+// rotationSlot: FIX #3, valore stabile assegnato una volta per sempre a ogni dipendente
+// rotante, usato dalla rotazione dei riposi — non va MAI ricalcolato dalla posizione
+// nell'array (a differenza del vecchio comportamento), altrimenti aggiungere/rimuovere/
+// riordinare qualcuno altera la rotazione di tutti gli altri.
+// active: FIX #10, flag di attivazione — chi è active:false non entra più nella
+// generazione automatica dei turni, ma i suoi turni storici restano intoccati.
+const DIPENDENTI_INIZIALI = [
+  { id: 1, cognome: "Visonà Dalla Pozza", nome: "Matteo", tipo: "direttore", riposoTipo: "fisso", riposoFissoGiorno: 5, rotationSlot: 0, active: true, colore: COLORI_DIPENDENTE[0], pin: "1111", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 2, cognome: "Pugnalin", nome: "Chiara", tipo: "fom", turniExtra: ["C1", "C2", "A1", "A2"], riposoTipo: "fisso", riposoFissoGiorno: 5, rotationSlot: 1, active: true, colore: COLORI_DIPENDENTE[1], pin: "4444", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 3, cognome: "Simone", nome: "Ana Beatrice", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 2, active: true, colore: COLORI_DIPENDENTE[2], pin: "2222", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 4, cognome: "De Rossi", nome: "Rima", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 3, active: true, colore: COLORI_DIPENDENTE[3], pin: "3333", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 5, cognome: "Breda", nome: "Francesco", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 4, active: true, colore: COLORI_DIPENDENTE[4], pin: "5555", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 6, cognome: "Anoè", nome: "Omar", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 5, active: true, colore: COLORI_DIPENDENTE[5], pin: "6666", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 7, cognome: "Kovtsunyak", nome: "Romana", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 6, active: true, colore: COLORI_DIPENDENTE[6], pin: "7777", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 8, cognome: "Campini", nome: "Raoul", tipo: "diurno", turniExtra: ["N"], riposoTipo: "rotante", rotationSlot: 7, active: true, colore: COLORI_DIPENDENTE[7], pin: "8888", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 9, cognome: "Cheng", nome: "Kevin Teng", tipo: "turnante", riposoTipo: "rotante", rotationSlot: 8, active: true, colore: COLORI_DIPENDENTE[8], pin: "9999", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+  { id: 10, cognome: "Zaitev", nome: "Constantin", tipo: "notturno", riposoTipo: "rotante", rotationSlot: 9, active: true, colore: COLORI_DIPENDENTE[9], pin: "1010", quotaFerieAnnua: QUOTA_FERIE_DEFAULT, quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT },
+];
+
+// Chiara è FOM: fa principalmente F1/F2, i diurni sono un turno di riserva
+const PREFERENZE_INIZIALI = {
+  2: { ordinePreferenza: ["F1", "F2"] },
+};
+
+// Converte un colore esadecimale in rgba con l'opacità indicata (per sfondi tenui dei badge)
+function hexRgba(hex, alpha) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Persistenza locale (Fase C rimanda a Supabase, ma nel frattempo lo stato non deve
+// perdersi a ogni refresh): un unico blob in localStorage con tutti i dati modificabili
+// dall'utente (dipendenti, turni, richieste, regole). Stato solo-UI (tab attiva, sessione
+// di login, mese visualizzato) resta volutamente fuori e non viene persistito.
+const STORAGE_KEY = "planner-turni-stato-v1";
+
+function caricaStatoSalvato() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+// La chiave del turno include anno e mese: così l'assegnazione (manuale o automatica)
+// di un mese non si sovrappone mai con quella di un altro mese.
+function keyTurno(empId, anno, mese, giorno) {
+  return `${empId}_${anno}_${mese}_${giorno}`;
+}
+
+// Genera le celle del calendario per un mese (settimane complete, Lun-Dom), includendo
+// i giorni "di contorno" del mese precedente/successivo per riempire la griglia.
+function generaGrigliaMese(anno, mese) {
+  const numGiorni = giorniDelMese(anno, mese);
+  const primoOffset = giornoSettimana(anno, mese, 1); // 0 = Lun
+  const celle = [];
+
+  const mesePrec = mese === 0 ? 11 : mese - 1;
+  const annoPrec = mese === 0 ? anno - 1 : anno;
+  const giorniPrec = giorniDelMese(annoPrec, mesePrec);
+  for (let i = primoOffset - 1; i >= 0; i--) {
+    celle.push({ anno: annoPrec, mese: mesePrec, giorno: giorniPrec - i, fuoriMese: true });
+  }
+  for (let g = 1; g <= numGiorni; g++) {
+    celle.push({ anno, mese, giorno: g, fuoriMese: false });
+  }
+  const meseSucc = mese === 11 ? 0 : mese + 1;
+  const annoSucc = mese === 11 ? anno + 1 : anno;
+  let gSucc = 1;
+  while (celle.length % 7 !== 0) {
+    celle.push({ anno: annoSucc, mese: meseSucc, giorno: gSucc++, fuoriMese: true });
+  }
+  return celle;
+}
+
+// Deriva le notifiche dell'utente corrente dagli esiti/richieste già presenti nello stato
+// (nessun log a parte): per il richiedente, l'esito di cambi/ferie/pre-assegnazioni; per
+// l'admin, le richieste ancora in sospeso che aspettano una sua decisione. L'id di ogni
+// notifica include lo stato ("swap-12-applicata") così che un nuovo esito per la stessa
+// richiesta risulti una notifica nuova, anche se quella precedente era già stata letta.
+function calcolaNotifiche({ empCorrente, isAdmin, richiesteSwap, richiesteAssenza, richiestePreassegnazione, dipendenti }) {
+  if (!empCorrente) return [];
+  const nome = (id) => {
+    const d = dipendenti.find((x) => x.id === id);
+    return d ? `${d.nome} ${d.cognome}` : "un collega";
+  };
+  const elenco = [];
+
+  richiesteSwap.forEach((r) => {
+    const quando = formattaData(r.giornoDa, r.meseDa, r.annoDa);
+    if (r.daEmpId === empCorrente.id) {
+      if (r.stato === STATI_SWAP.APPLICATA) {
+        elenco.push({ id: `swap-${r.id}-${r.stato}`, ordine: r.id, positivo: true, testo: `Cambio turno con ${nome(r.aEmpId)} accettato — ${quando}.` });
+      } else if (r.stato === STATI_SWAP.RIFIUTATA_COLLEGA) {
+        elenco.push({ id: `swap-${r.id}-${r.stato}`, ordine: r.id, positivo: false, testo: `${nome(r.aEmpId)} ha rifiutato il cambio turno del ${quando}.` });
+      } else if (r.stato === STATI_SWAP.RIFIUTATA_ADMIN) {
+        elenco.push({ id: `swap-${r.id}-${r.stato}`, ordine: r.id, positivo: false, testo: `L'admin ha rifiutato il cambio turno con ${nome(r.aEmpId)} del ${quando}.` });
+      }
+    }
+    if (r.aEmpId === empCorrente.id && r.stato === STATI_SWAP.IN_ATTESA_COLLEGA) {
+      elenco.push({ id: `swap-${r.id}-${r.stato}`, ordine: r.id, positivo: null, testo: `${nome(r.daEmpId)} ti ha proposto un cambio turno — ${quando}.` });
+    }
+    if (isAdmin && r.stato === STATI_SWAP.IN_ATTESA_ADMIN) {
+      elenco.push({ id: `swap-${r.id}-${r.stato}`, ordine: r.id, positivo: null, testo: `Cambio turno tra ${nome(r.daEmpId)} e ${nome(r.aEmpId)} in attesa della tua approvazione.` });
+    }
+  });
+
+  richiesteAssenza.forEach((r) => {
+    const tipoLabel = r.tipo === "F" ? "Ferie" : "Permesso";
+    const quando = formattaData(r.giorno, r.mese, r.anno);
+    if (r.empId === empCorrente.id) {
+      if (r.stato === "approvata") {
+        elenco.push({ id: `assenza-${r.id}-${r.stato}`, ordine: r.id, positivo: true, testo: `${tipoLabel} approvate per il ${quando}.` });
+      } else if (r.stato === "rifiutata") {
+        elenco.push({ id: `assenza-${r.id}-${r.stato}`, ordine: r.id, positivo: false, testo: `${tipoLabel} rifiutate per il ${quando}.` });
+      }
+    }
+    if (isAdmin && r.stato === "in sospeso") {
+      elenco.push({ id: `assenza-${r.id}-${r.stato}`, ordine: r.id, positivo: null, testo: `${nome(r.empId)} ha richiesto ${tipoLabel.toLowerCase()} per il ${quando}.` });
+    }
+  });
+
+  richiestePreassegnazione.forEach((r) => {
+    const quando = formattaData(r.giorno, r.mese, r.anno);
+    if (r.empId === empCorrente.id && !isAdmin) {
+      if (r.stato === "approvata") {
+        elenco.push({ id: `preassegnazione-${r.id}-${r.stato}`, ordine: r.id, positivo: true, testo: `Pre-assegnazione approvata per il ${quando}.` });
+      } else if (r.stato === "rifiutata") {
+        elenco.push({ id: `preassegnazione-${r.id}-${r.stato}`, ordine: r.id, positivo: false, testo: `Pre-assegnazione rifiutata per il ${quando}.` });
+      }
+    }
+    if (isAdmin && r.stato === "in sospeso") {
+      elenco.push({ id: `preassegnazione-${r.id}-${r.stato}`, ordine: r.id, positivo: null, testo: `${nome(r.empId)} ha richiesto una pre-assegnazione per il ${quando}.` });
+    }
+  });
+
+  return elenco.sort((a, b) => b.ordine - a.ordine);
+}
+
+// ---------- Componente principale ----------
+
+export default function PlannerTurni() {
+  const oggi = new Date();
+  const [anno, setAnno] = useState(oggi.getFullYear());
+  const [mese, setMese] = useState(oggi.getMonth());
+
+  // Breakpoint mobile: pilota gli aggiustamenti di layout (padding, font-size) che
+  // non si possono esprimere solo con flexWrap, dato che gli stili sono inline.
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 640px)");
+    const aggiorna = () => setIsMobile(mql.matches);
+    aggiorna();
+    mql.addEventListener("change", aggiorna);
+    return () => mql.removeEventListener("change", aggiorna);
+  }, []);
+
+  const statoSalvato = useMemo(() => caricaStatoSalvato(), []);
+
+  const [dipendenti, setDipendenti] = useState(statoSalvato.dipendenti ?? DIPENDENTI_INIZIALI);
+  const [statoPerMese, setStatoPerMese] = useState(statoSalvato.statoPerMese ?? {}); // { "anno_mese": "bozza" | "definitivo" }
+  const chiaveMese = `${anno}_${mese}`;
+  const statoMese = statoPerMese[chiaveMese] ?? "bozza";
+  function toggleStatoMese() {
+    setStatoPerMese((prev) => ({
+      ...prev,
+      [chiaveMese]: (prev[chiaveMese] ?? "bozza") === "bozza" ? "definitivo" : "bozza",
+    }));
+  }
+  const [turni, setTurni] = useState(statoSalvato.turni ?? {}); // { "empId_anno_mese_giorno": { code, dnm } }
+  const [coperturaRegole, setCoperturaRegole] = useState(statoSalvato.coperturaRegole ?? COPERTURA_DEFAULT);
+  const [preferenze, setPreferenze] = useState(statoSalvato.preferenze ?? PREFERENZE_INIZIALI);
+  const [richiesteSwap, setRichiesteSwap] = useState(statoSalvato.richiesteSwap ?? []);
+  const [richiesteAssenza, setRichiesteAssenza] = useState(statoSalvato.richiesteAssenza ?? []);
+  const [richiestePreassegnazione, setRichiestePreassegnazione] = useState(statoSalvato.richiestePreassegnazione ?? []);
+  const [conflitti, setConflitti] = useState(statoSalvato.conflitti ?? []);
+  // { [empId]: [idNotifica, ...] } — quali notifiche ha già visto ciascun utente.
+  const [notificheLette, setNotificheLette] = useState(statoSalvato.notificheLette ?? {});
+  const [pannelloNotificheAperto, setPannelloNotificheAperto] = useState(false);
+
+  const [utenteLoggato, setUtenteLoggato] = useState(null); // { id, isAdmin }
+  const [loginEmpId, setLoginEmpId] = useState("");
+  const [loginPin, setLoginPin] = useState("");
+  const [loginErrore, setLoginErrore] = useState("");
+
+  const [tab, setTab] = useState("calendario");
+  const [cellaSelezionata, setCellaSelezionata] = useState(null); // { empId, giorno }
+  const [nuovoCodiceRegola, setNuovoCodiceRegola] = useState("");
+  const [meseMiei, setMeseMiei] = useState(oggi.getMonth());
+  const [annoMiei, setAnnoMiei] = useState(oggi.getFullYear());
+  const [nuovaQuantitaRegola, setNuovaQuantitaRegola] = useState(1);
+
+  // Regole assolute e di preferenza: attivabili/disattivabili dall'admin, effettivamente
+  // collegate all'algoritmo di assegnazione automatica (non solo testo informativo).
+  const [regoleAttive, setRegoleAttive] = useState(statoSalvato.regoleAttive ?? {
+    // assolute
+    sequenzaC2A1Vietata: true,
+    prioritaNotturno: true,
+    riposoTurnanteDopoNotturno: true,
+    direttoreD1D2Auto: true,
+    fomF1F2Auto: true,
+    ceAutomatico: true,
+    // preferenza
+    sequenzaPreferibileEvitata: true,
+    equitaSequenzeScomode: true,
+    equilibrioMattinaPomeriggio: true,
+    variazioneSettimanale: true,
+    preferenzePersonali: true,
+  });
+
+  function toggleRegola(chiave) {
+    setRegoleAttive((prev) => ({ ...prev, [chiave]: !prev[chiave] }));
+  }
+
+  // Ordine di priorità delle regole di preferenza: sono criteri usati in sequenza per scegliere
+  // tra più candidati validi (a differenza delle regole assolute, che sono vincoli indipendenti
+  // e non hanno un ordine che ne cambia l'effetto). Spostabile dall'admin in "Regole copertura".
+  // L'equilibrio mattina/pomeriggio va per primo: è il criterio con l'impatto più ampio e
+  // sistemico sulla distribuzione del mese; se un criterio più "di dettaglio" come l'equità
+  // sulle sequenze scomode venisse controllato prima, deciderebbe la maggior parte dei casi
+  // per conto suo e impedirebbe all'equilibrio mattina/pomeriggio di correggere davvero chi si
+  // è specializzato su una sola categoria di turno.
+  const [ordineRegolePreferenza, setOrdineRegolePreferenza] = useState(statoSalvato.ordineRegolePreferenza ?? [
+    "equilibrioMattinaPomeriggio",
+    "sequenzaPreferibileEvitata",
+    "equitaSequenzeScomode",
+    "variazioneSettimanale",
+    "preferenzePersonali",
+  ]);
+
+  function spostaRegolaPreferenza(chiave, direzione) {
+    setOrdineRegolePreferenza((prev) => {
+      const indice = prev.indexOf(chiave);
+      const target = indice + direzione;
+      if (target < 0 || target >= prev.length) return prev;
+      const nuovo = [...prev];
+      [nuovo[indice], nuovo[target]] = [nuovo[target], nuovo[indice]];
+      return nuovo;
+    });
+  }
+
+  // Salva su localStorage a ogni modifica dei dati (non dello stato di sola UI), così
+  // aggiungere/eliminare un dipendente o assegnare un turno sopravvive al refresh della pagina.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        dipendenti,
+        statoPerMese,
+        turni,
+        coperturaRegole,
+        preferenze,
+        richiesteSwap,
+        richiesteAssenza,
+        richiestePreassegnazione,
+        conflitti,
+        regoleAttive,
+        ordineRegolePreferenza,
+        notificheLette,
+      }));
+    } catch {
+      // storage non disponibile (es. modalità privata/quota esaurita): l'app resta usabile in memoria
+    }
+  }, [dipendenti, statoPerMese, turni, coperturaRegole, preferenze, richiesteSwap, richiesteAssenza, richiestePreassegnazione, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
+
+  const numGiorni = giorniDelMese(anno, mese);
+  const giorniArray = Array.from({ length: numGiorni }, (_, i) => i + 1);
+
+  const nomeMese = new Date(anno, mese, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
+  // scorciatoia: chiave turno per il mese/anno attualmente selezionato
+  const kt = (empId, giorno) => keyTurno(empId, anno, mese, giorno);
+
+  // ---------- Login ----------
+
+  function handleLogin() {
+    const emp = dipendenti.find((d) => d.id === Number(loginEmpId));
+    if (!emp) {
+      setLoginErrore("Seleziona un dipendente.");
+      return;
+    }
+    if (emp.pin !== loginPin) {
+      setLoginErrore("PIN errato.");
+      return;
+    }
+    setLoginErrore("");
+    setUtenteLoggato({ id: emp.id, isAdmin: emp.tipo === "direttore" || emp.tipo === "fom" });
+    setTab("calendario");
+  }
+
+  function handleLogout() {
+    setUtenteLoggato(null);
+    setLoginEmpId("");
+    setLoginPin("");
+  }
+
+  const isAdmin = utenteLoggato?.isAdmin;
+
+  // ---------- Gestione turni ----------
+
+  function impostaTurno(empId, giorno, code) {
+    const k = kt(empId, giorno);
+    setTurni((prev) => {
+      const esito = canModifyShift(prev[k]);
+      if (!esito.allowed) {
+        alert(esito.reason);
+        return prev;
+      }
+      const next = { ...prev };
+      if (!code) {
+        delete next[k];
+      } else {
+        next[k] = { code, dnm: false };
+      }
+      return next;
+    });
+  }
+
+  function toggleDNM(empId, giorno) {
+    const k = kt(empId, giorno);
+    setTurni((prev) => {
+      if (!prev[k]) return prev;
+      return { ...prev, [k]: { ...prev[k], dnm: !prev[k].dnm } };
+    });
+  }
+
+  // Risolve una segnalazione "sequenza da preferire diversamente" (C1→A1 o C2→A2) SENZA
+  // lasciare lo slot scoperto: prova prima a scambiare il turno del giorno successivo con un
+  // collega che lavora già quel giorno con un turno diverso (così restano entrambi coperti);
+  // se non trova un collega disponibile per lo scambio, cerca un sostituto libero per il turno
+  // originale e sposta il dipendente coinvolto su CE (se il suo ruolo lo ammette), così nessuno
+  // resta senza turno. Se nemmeno questo è possibile, avvisa che serve un intervento manuale.
+  // IMPORTANTE: non applica mai una modifica che crei la sequenza assoluta vietata (C2 seguito
+  // da A1) per nessuno dei dipendenti coinvolti, né guardando al giorno prima né al giorno dopo.
+  const MAPPA_SEQUENZE_PREFERIBILI_GLOBALE = { A1: "C1", A2: "C2" };
+
+  function correggiSequenza(v) {
+    const giornoSucc = v.giorno + 1;
+    const kX = kt(v.empId, giornoSucc);
+    const empX = dipendenti.find((x) => x.id === v.empId);
+
+    // FIX #5: prima questo controllo mancava del tutto — si verificava solo il DNM del
+    // collega coinvolto nello scambio (tY.dnm sotto), mai quello del proprio slot (kX).
+    const guardX = canModifyShift(turni[kX]);
+    if (!guardX.allowed) {
+      alert(`Non posso correggere questa sequenza: ${guardX.reason}`);
+      return;
+    }
+
+    const ieriSucc = giornoPrecedente(anno, mese, giornoSucc);
+    const violaPerAltri = (d, codice) => {
+      const turnoPrec = MAPPA_SEQUENZE_PREFERIBILI_GLOBALE[codice];
+      if (!turnoPrec) return false;
+      return turni[keyTurno(d.id, ieriSucc.anno, ieriSucc.mese, ieriSucc.giorno)]?.code === turnoPrec;
+    };
+
+    // Non creare MAI la sequenza assoluta vietata (C2 seguito da A1): controlla sia il giorno
+    // prima (qualcun altro ha fatto C2 e daremmo A1) sia il giorno dopo (assegneremmo C2 e il
+    // giorno successivo quella persona ha già A1).
+    const violaSequenzaAssoluta = (empId, giorno, codice) => {
+      const ieri = giornoPrecedente(anno, mese, giorno);
+      const turnoIeri = turni[keyTurno(empId, ieri.anno, ieri.mese, ieri.giorno)]?.code;
+      if (turnoIeri === "C2" && codice === "A1") return true;
+      if (codice === "C2" && giorno < numGiorni) {
+        const turnoDomani = turni[kt(empId, giorno + 1)]?.code;
+        if (turnoDomani === "A1") return true;
+      }
+      return false;
+    };
+
+    // --- Tentativo 1: scambio con un collega che lavora lo stesso giorno con un turno diverso ---
+    const candidatoScambio = dipendenti.find((d) => {
+      if (d.id === v.empId) return false;
+      const tY = turni[kt(d.id, giornoSucc)];
+      if (!tY || !canModifyShift(tY).allowed || tY.code === v.domani) return false;
+      if (!["C1", "C2", "A1", "A2", "N", "CE"].includes(tY.code)) return false;
+      if (!turniAmmessiDipendente(empX).includes(tY.code)) return false;
+      if (!turniAmmessiDipendente(d).includes(v.domani)) return false;
+      if (violaPerAltri(d, v.domani)) return false;
+      if (violaSequenzaAssoluta(v.empId, giornoSucc, tY.code)) return false;
+      if (violaSequenzaAssoluta(d.id, giornoSucc, v.domani)) return false;
+      return true;
+    });
+
+    if (candidatoScambio) {
+      const kY = kt(candidatoScambio.id, giornoSucc);
+      const codiceY = turni[kY].code;
+      setTurni((prev) => ({
+        ...prev,
+        [kX]: { code: codiceY, dnm: false },
+        [kY]: { code: v.domani, dnm: false },
+      }));
+      return;
+    }
+
+    // --- Tentativo 2: sostituto libero per il turno originale, e X spostato su CE ---
+    // (CE non può mai creare la sequenza assoluta vietata, quindi qui basta controllare il sostituto)
+    const sostitutoLibero = dipendenti.find((d) => {
+      if (d.id === v.empId) return false;
+      if (!turniAmmessiDipendente(d).includes(v.domani)) return false;
+      if (turni[kt(d.id, giornoSucc)]) return false;
+      if (violaPerAltri(d, v.domani)) return false;
+      if (violaSequenzaAssoluta(d.id, giornoSucc, v.domani)) return false;
+      return true;
+    });
+
+    if (sostitutoLibero) {
+      const kSostituto = kt(sostitutoLibero.id, giornoSucc);
+      const puoFareCE = empX.tipo === "diurno" || empX.tipo === "turnante";
+      setTurni((prev) => {
+        const next = { ...prev, [kSostituto]: { code: v.domani, dnm: false } };
+        if (puoFareCE) next[kX] = { code: "CE", dnm: false };
+        return next;
+      });
+      return;
+    }
+
+    alert("Nessuna soluzione automatica trovata senza creare una sequenza da evitare (C2 seguito da A1): correggi manualmente dal calendario.");
+  }
+
+  // ---------- Assegnazione automatica ----------
+  // Vale solo per il mese/anno attualmente selezionato: le chiavi dei turni includono
+  // anno e mese, quindi non tocca mai i dati di altri mesi.
+  // Ad ogni click riparte da zero per il mese corrente, MA rispetta sempre i turni
+  // bloccati con DNM (che restano fissi) e i turni di altri mesi (mai toccati).
+
+  function assegnaAutomaticamente() {
+    // FIX #4, #6, #9: la logica di generazione è ora nel modulo di dominio puro
+    // generateSchedule() (src/domain/assignment.js), testato in isolamento. Qui il componente
+    // si limita a raccogliere l'input, chiamarlo, e applicare il risultato allo stato React.
+    const risultato = generateSchedule({
+      dipendenti,
+      turniEsistenti: turni,
+      anno,
+      mese,
+      numGiorni,
+      coperturaRegole,
+      regoleAttive,
+      ordineRegolePreferenza,
+      preferenze,
+      statoMese,
+    });
+
+    if (risultato.bloccato) {
+      // FIX #6: il mese è Definitivo — generateSchedule si è rifiutata di rigenerare.
+      alert(risultato.conflitti[0]?.messaggio || "Il mese è Definitivo: rigenerazione bloccata.");
+      return;
+    }
+
+    setTurni(risultato.turni);
+    setConflitti(risultato.conflitti);
+  }
+
+
+  // Pre-imposta SOLO i giorni di riposo (non i turni di copertura) per un certo numero di mesi
+  // futuri, a partire dal mese successivo a quello visualizzato — usando la stessa regola di
+  // rotazione (la coppia di riposo scala indietro di 1 giorno ogni mese) già usata per il mese
+  // corrente. Non tocca mai un giorno che ha già un turno impostato (di alcun tipo).
+  function impostaRiposiMesiSuccessivi(numeroMesi = 12) {
+    setTurni((prev) => {
+      const next = { ...prev };
+      for (let offset = 1; offset <= numeroMesi; offset++) {
+        const meseTarget = (mese + offset) % 12;
+        const annoTarget = anno + Math.floor((mese + offset) / 12);
+        const giorniTarget = giorniDelMese(annoTarget, meseTarget);
+        const offsetRiposoPerId = calcolaOffsetRiposoPerMese(dipendenti, annoTarget, meseTarget);
+
+        dipendenti.forEach((d) => {
+          const offsetRiposo = offsetRiposoPerId[d.id];
+          for (let giorno = 1; giorno <= giorniTarget; giorno++) {
+            const k = keyTurno(d.id, annoTarget, meseTarget, giorno);
+            if (next[k]) continue; // non sovrascrivere un turno già presente
+            const gs = giornoSettimana(annoTarget, meseTarget, giorno);
+            if (gs === offsetRiposo || gs === (offsetRiposo + 1) % 7) {
+              next[k] = { code: "R", dnm: false };
+            }
+          }
+        });
+      }
+      return next;
+    });
+  }
+
+  // ---------- Riepiloghi ----------
+
+  const riepilogoOre = useMemo(() => {
+    const res = {};
+    dipendenti.forEach((d) => {
+      let giorniLavorati = 0;
+      giorniArray.forEach((g) => {
+        const t = turni[kt(d.id, g)];
+        if (t && !["R", "F", "P"].includes(t.code)) giorniLavorati++;
+      });
+      res[d.id] = giorniLavorati;
+    });
+    return res;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turni, dipendenti, giorniArray, anno, mese]);
+
+  // Recap: quanti giorni di A1, A2, C1, C2, N ha fatto ciascun dipendente questo mese
+  const CODICI_RECAP = ["A1", "A2", "C1", "C2", "N"];
+  const recapTurniTipo = useMemo(() => {
+    const res = {};
+    dipendenti.forEach((d) => {
+      const conteggi = {};
+      CODICI_RECAP.forEach((code) => {
+        conteggi[code] = giorniArray.filter((g) => turni[kt(d.id, g)]?.code === code).length;
+      });
+      res[d.id] = conteggi;
+    });
+    return res;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turni, dipendenti, giorniArray, anno, mese]);
+
+  // Recap: ferie e permessi rimanenti nell'anno (calcolato su tutti i mesi dell'anno, non solo quello visualizzato)
+  const recapFeriePermessi = useMemo(() => {
+    const res = {};
+    dipendenti.forEach((d) => {
+      let ferieUsate = 0;
+      Object.entries(turni).forEach(([k, v]) => {
+        const [empIdStr, annoStr] = k.split("_");
+        if (Number(empIdStr) === d.id && Number(annoStr) === anno && v.code === "F") {
+          ferieUsate += 1;
+        }
+      });
+      let permessiOreUsate = 0;
+      richiesteAssenza
+        .filter((r) => r.empId === d.id && r.anno === anno && r.tipo === "P" && r.stato === "approvata")
+        .forEach((r) => {
+          permessiOreUsate += r.ore || 8; // se non specificate, considera una giornata piena (8h)
+        });
+      res[d.id] = {
+        ferieUsate,
+        ferieResidue: (d.quotaFerieAnnua ?? QUOTA_FERIE_DEFAULT) - ferieUsate,
+        permessiOreUsate,
+        permessiOreResidue: (d.quotaPermessiOreAnnue ?? QUOTA_PERMESSI_ORE_DEFAULT) - permessiOreUsate,
+      };
+    });
+    return res;
+  }, [turni, dipendenti, richiesteAssenza, anno]);
+
+  // Rileva sequenze C2 (sera) seguito da A1 (mattina presto) il giorno dopo, anche se inserite a mano
+  const violazioniSequenza = useMemo(() => {
+    const elenco = [];
+    dipendenti.forEach((d) => {
+      giorniArray.forEach((g) => {
+        if (g + 1 > numGiorni) return;
+        const oggiTurno = turni[kt(d.id, g)];
+        const domaniTurno = turni[kt(d.id, g + 1)];
+        if (oggiTurno?.code === "C2" && domaniTurno?.code === "A1") {
+          elenco.push({ empId: d.id, giorno: g });
+        }
+      });
+    });
+    return elenco;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turni, dipendenti, giorniArray, numGiorni, anno, mese]);
+
+  // Rileva sequenze "preferibili da evitare" (C1→A1, C2→A2): non bloccanti, solo un avviso
+  const avvisiSequenzaPreferibile = useMemo(() => {
+    const mappa = { C1: "A1", C2: "A2" };
+    const elenco = [];
+    dipendenti.forEach((d) => {
+      giorniArray.forEach((g) => {
+        if (g + 1 > numGiorni) return;
+        const oggiTurno = turni[kt(d.id, g)];
+        const domaniTurno = turni[kt(d.id, g + 1)];
+        if (mappa[oggiTurno?.code] && mappa[oggiTurno.code] === domaniTurno?.code) {
+          elenco.push({ empId: d.id, giorno: g, oggi: oggiTurno.code, domani: domaniTurno?.code });
+        }
+      });
+    });
+    return elenco;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turni, dipendenti, giorniArray, numGiorni, anno, mese]);
+
+  // ---------- Swap ----------
+  // FIX #7: macchina a stati esplicita, coerente con la UI che promette "conferma del collega
+  // e, a mese Definitivo, dell'Admin" — prima veniva applicato subito dopo l'accettazione del
+  // collega, ignorando lo stato Bozza/Definitivo. Vedi src/domain/swapWorkflow.js.
+
+  function richiediSwap(empId, annoDa, meseDa, giornoDa, empDestinatarioId, annoA, meseA, giornoA) {
+    setRichiesteSwap((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        daEmpId: empId,
+        aEmpId: empDestinatarioId,
+        annoDa,
+        meseDa,
+        giornoDa,
+        annoA,
+        meseA,
+        giornoA,
+        turnoDa: turni[keyTurno(empId, annoDa, meseDa, giornoDa)]?.code || null,
+        turnoA: turni[keyTurno(empDestinatarioId, annoA, meseA, giornoA)]?.code || null,
+        stato: STATI_SWAP.IN_ATTESA_COLLEGA,
+      },
+    ]);
+  }
+
+  // FIX #8: rivalidazione al momento dell'applicazione effettiva (non solo alla creazione della
+  // richiesta) — applicaScambio() ricontrolla che entrambi gli slot siano ancora modificabili
+  // (non DNM) e corrispondano ancora ai turni originali della richiesta, usando lo stato LIVE
+  // di `turni`, non lo snapshot salvato al momento della richiesta.
+  function applicaSwapEffettivo(richiesta) {
+    const esito = applicaScambio(turni, richiesta, keyTurno);
+    if (!esito.ok) {
+      alert(esito.errore);
+      setRichiesteSwap((prev) =>
+        prev.map((r) => (r.id === richiesta.id ? { ...r, stato: STATI_SWAP.RIFIUTATA_ADMIN, notaSistema: esito.errore } : r))
+      );
+      return;
+    }
+    setTurni(esito.turni);
+  }
+
+  // Il collega destinatario risponde: in Bozza l'accettazione applica subito, in Definitivo
+  // passa in attesa dell'admin (accettaDaCollega decide in base a statoMese).
+  function rispondiSwapCollega(id, accetta) {
+    const richiesta = richiesteSwap.find((r) => r.id === id);
+    if (!richiesta) return;
+    if (!accetta) {
+      setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: rifiutaDaCollega() } : r)));
+      return;
+    }
+    const nuovoStato = accettaDaCollega(statoMese);
+    setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato } : r)));
+    if (nuovoStato === STATI_SWAP.APPLICATA) applicaSwapEffettivo(richiesta);
+  }
+
+  // L'admin risponde, solo quando la richiesta è in attesa sua (mese Definitivo).
+  function rispondiSwapAdmin(id, approva) {
+    const richiesta = richiesteSwap.find((r) => r.id === id);
+    if (!richiesta) return;
+    const nuovoStato = approva ? approvaSwapAdmin() : rifiutaSwapAdmin();
+    setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato } : r)));
+    if (nuovoStato === STATI_SWAP.APPLICATA) applicaSwapEffettivo(richiesta);
+  }
+
+  // ---------- Richieste ferie/permessi ----------
+
+  function richiediAssenza(empId, giorno, annoRichiesta, meseRichiesta, tipo, turnoInteressato, dettagli) {
+    setRichiesteAssenza((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        empId,
+        giorno,
+        anno: annoRichiesta,
+        mese: meseRichiesta,
+        tipo,
+        turnoInteressato: turnoInteressato || null,
+        nota: dettagli?.nota || "",
+        ore: dettagli?.ore || null,
+        oraInizio: dettagli?.oraInizio || "",
+        oraFine: dettagli?.oraFine || "",
+        stato: "in sospeso",
+      },
+    ]);
+  }
+
+  function gestisciAssenza(id, decisione) {
+    setRichiesteAssenza((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, stato: decisione } : r))
+    );
+    if (decisione === "approvata") {
+      const r = richiesteAssenza.find((r) => r.id === id);
+      if (r) {
+        const k = keyTurno(r.empId, r.anno, r.mese, r.giorno);
+        setTurni((prev) => {
+          const esito = canModifyShift(prev[k]);
+          if (!esito.allowed) {
+            alert(`Impossibile applicare l'assenza approvata: ${esito.reason}`);
+            return prev;
+          }
+          return { ...prev, [k]: { code: r.tipo, dnm: false } };
+        });
+      }
+    }
+  }
+
+  // ---------- Pre-assegnazione turni (richiesta dipendente, conferma admin) ----------
+
+  // "giorno libero" (LIBERO) equivale a un riposo; altrimenti si usa il codice turno scelto.
+  // In entrambi i casi, una volta applicata la pre-assegnazione il turno si blocca (DNM).
+  // FIX #5: anche qui, non si può più sovrascrivere incondizionatamente uno slot già bloccato.
+  function applicaPreassegnazioneTurno(empId, giorno, annoTarget, meseTarget, turno) {
+    const codice = turno === "LIBERO" ? "R" : turno;
+    const k = keyTurno(empId, annoTarget, meseTarget, giorno);
+    setTurni((prev) => {
+      const esito = canModifyShift(prev[k]);
+      if (!esito.allowed) {
+        alert(`Impossibile applicare la pre-assegnazione: ${esito.reason}`);
+        return prev;
+      }
+      return { ...prev, [k]: { code: codice, dnm: true } };
+    });
+  }
+
+  function richiediPreassegnazione(empId, giorno, annoRichiesta, meseRichiesta, turno, nota) {
+    // L'admin può pre-assegnare turni (anche per altri dipendenti) senza attendere conferma:
+    // la richiesta viene applicata subito ed è già "approvata".
+    const statoIniziale = isAdmin ? "approvata" : "in sospeso";
+    setRichiestePreassegnazione((prev) => [
+      ...prev,
+      { id: Date.now(), empId, giorno, anno: annoRichiesta, mese: meseRichiesta, turno, nota: nota || "", stato: statoIniziale },
+    ]);
+    if (isAdmin) {
+      applicaPreassegnazioneTurno(empId, giorno, annoRichiesta, meseRichiesta, turno);
+    }
+  }
+
+  function gestisciPreassegnazione(id, decisione) {
+    setRichiestePreassegnazione((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, stato: decisione } : r))
+    );
+    if (decisione === "approvata") {
+      const r = richiestePreassegnazione.find((r) => r.id === id);
+      if (r) applicaPreassegnazioneTurno(r.empId, r.giorno, r.anno, r.mese, r.turno);
+    }
+  }
+
+  // ---------- Preferenze ----------
+
+  function aggiornaPreferenza(empId, campo, valore) {
+    setPreferenze((prev) => ({
+      ...prev,
+      [empId]: { ...prev[empId], [campo]: valore },
+    }));
+  }
+
+  // ---------- Regole di copertura (quantità richiesta per turno, editabile dall'admin) ----------
+
+  function aggiornaQuantitaRegola(codice, nuovaQuantita) {
+    const q = Math.max(0, Math.min(9, nuovaQuantita));
+    setCoperturaRegole((prev) => ({ ...prev, [codice]: q }));
+  }
+
+  function aggiungiRegolaCopertura(codice, quantita) {
+    if (!codice || coperturaRegole[codice] !== undefined) return;
+    setCoperturaRegole((prev) => ({ ...prev, [codice]: Math.max(1, Math.min(9, quantita)) }));
+  }
+
+  function rimuoviRegolaCopertura(codice) {
+    setCoperturaRegole((prev) => {
+      const next = { ...prev };
+      delete next[codice];
+      return next;
+    });
+  }
+
+  // ---------- Stili ----------
+
+  const styles = {
+    page: {
+      fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      background: COLORI.mist,
+      minHeight: "100vh",
+      color: COLORI.ink,
+    },
+    header: {
+      background: "transparent",
+      color: COLORI.ink,
+      padding: isMobile ? "16px 14px 4px" : "26px 28px 6px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      flexWrap: "wrap",
+      gap: "12px",
+      maxWidth: "1180px",
+      margin: "0 auto",
+    },
+    logoRow: { display: "flex", alignItems: "center", gap: isMobile ? "10px" : "14px" },
+    logoMark: {
+      width: "44px",
+      height: "44px",
+      borderRadius: "50%",
+      background: COLORI.ottone,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: "'Roboto', sans-serif",
+      fontSize: "15px",
+      fontWeight: 700,
+      color: "white",
+      flexShrink: 0,
+    },
+    title: {
+      fontFamily: "'Roboto', sans-serif",
+      fontSize: isMobile ? "21px" : "28px",
+      fontWeight: 700,
+      margin: 0,
+      letterSpacing: "-0.01em",
+      color: COLORI.ink,
+    },
+    subtitle: {
+      fontSize: "13px",
+      color: COLORI.muted,
+      marginTop: "2px",
+      fontWeight: 500,
+    },
+    navWrapper: {
+      maxWidth: "1180px",
+      margin: isMobile ? "12px auto 14px" : "18px auto 22px",
+      padding: isMobile ? "0 14px" : "0 28px",
+    },
+    nav: {
+      display: "flex",
+      gap: "2px",
+      background: COLORI.inkDark,
+      padding: "6px",
+      borderRadius: "12px",
+      overflowX: "auto",
+      WebkitOverflowScrolling: "touch",
+    },
+    navBtn: (active) => ({
+      border: "none",
+      background: active ? "#FFFFFF" : "transparent",
+      color: active ? COLORI.ink : "rgba(255,255,255,0.65)",
+      padding: isMobile ? "9px 14px" : "10px 18px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontSize: isMobile ? "12.5px" : "13px",
+      fontWeight: active ? 700 : 500,
+      fontFamily: "inherit",
+      letterSpacing: "0.01em",
+      whiteSpace: "nowrap",
+      flexShrink: 0,
+    }),
+    container: { padding: isMobile ? "0 14px 28px" : "0 28px 40px", maxWidth: "1180px", margin: "0 auto" },
+    card: {
+      background: COLORI.card,
+      borderRadius: isMobile ? "14px" : "20px",
+      border: "none",
+      padding: isMobile ? "16px 14px" : "22px 24px",
+      boxShadow: "0 8px 24px rgba(28,30,46,0.06)",
+      marginBottom: "18px",
+    },
+    sectionTitle: {
+      fontFamily: "'Roboto', sans-serif",
+      fontSize: isMobile ? "16px" : "18px",
+      fontWeight: 700,
+      margin: "0 0 4px",
+      color: COLORI.ink,
+    },
+    table: { borderCollapse: "collapse", width: "100%", fontSize: "12.5px" },
+    th: {
+      padding: "6px 4px",
+      textAlign: "center",
+      background: COLORI.mist,
+      color: COLORI.muted,
+      fontWeight: 600,
+      fontSize: "11px",
+      position: "sticky",
+      top: 0,
+      minWidth: "28px",
+      borderBottom: `1px solid ${COLORI.hairlineForte}`,
+    },
+    thWeekend: {
+      background: "#E1E4F5",
+    },
+    tdEmp: {
+      padding: "9px 12px",
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+      background: COLORI.card,
+      position: "sticky",
+      left: 0,
+      borderBottom: `1px solid ${COLORI.hairline}`,
+      fontSize: "13px",
+    },
+    tdCell: {
+      padding: "2px",
+      textAlign: "center",
+      borderBottom: `1px solid ${COLORI.hairline}`,
+      borderRight: `1px solid #F3F4F2`,
+      cursor: "pointer",
+      minWidth: "28px",
+      height: "30px",
+    },
+    tdCellWeekend: {
+      background: "#FAFBF9",
+    },
+    tdCellSelezionata: {
+      filter: "brightness(0.88)",
+      borderRadius: "6px",
+    },
+    tdCellSelezionataVuota: {
+      background: hexRgba(COLORI.selezione, 0.09),
+      borderRadius: "6px",
+    },
+    badge: (colore) => ({
+      display: "inline-block",
+      minWidth: "24px",
+      padding: "3px 6px",
+      borderRadius: "6px",
+      color: testoContrastante(colore),
+      background: colore,
+      fontSize: "10.5px",
+      fontWeight: 700,
+      letterSpacing: "0.02em",
+      textAlign: "center",
+    }),
+    badgeCalendario: (colore) => ({
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: "18px",
+      padding: "1px 4px",
+      borderRadius: "4px",
+      color: testoContrastante(colore),
+      background: colore,
+      fontSize: "9px",
+      fontWeight: 700,
+      letterSpacing: "0.01em",
+    }),
+    input: {
+      padding: "10px 12px",
+      borderRadius: "10px",
+      border: `1px solid ${COLORI.hairlineForte}`,
+      // 16px su mobile evita lo zoom automatico di iOS Safari al focus su un campo.
+      fontSize: isMobile ? "16px" : "13px",
+      width: "100%",
+      boxSizing: "border-box",
+      fontFamily: "inherit",
+      background: COLORI.card,
+      color: COLORI.ink,
+    },
+    select: {
+      padding: "10px 12px",
+      borderRadius: "10px",
+      border: `1px solid ${COLORI.hairlineForte}`,
+      fontSize: isMobile ? "16px" : "13px",
+      fontFamily: "inherit",
+      background: COLORI.card,
+      color: COLORI.ink,
+      cursor: "pointer",
+    },
+    datePickerTrigger: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "8px",
+      background: COLORI.card,
+      border: `1px solid ${COLORI.hairlineForte}`,
+      borderRadius: "10px",
+      padding: "10px 12px",
+      fontSize: "13px",
+      fontWeight: 600,
+      color: COLORI.ink,
+      cursor: "pointer",
+      fontFamily: "inherit",
+    },
+    datePickerPannello: {
+      position: "absolute",
+      top: "calc(100% + 6px)",
+      left: 0,
+      zIndex: 50,
+      background: COLORI.card,
+      borderRadius: "14px",
+      boxShadow: "0 12px 32px rgba(28,30,46,0.16)",
+      padding: "14px",
+      width: "270px",
+    },
+    datePickerHeader: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: "10px",
+    },
+    datePickerFreccia: {
+      border: "none",
+      background: COLORI.mist,
+      borderRadius: "50%",
+      width: "26px",
+      height: "26px",
+      cursor: "pointer",
+      fontSize: "14px",
+      color: COLORI.ink,
+      lineHeight: 1,
+    },
+    datePickerMeseAnno: {
+      border: "none",
+      background: "transparent",
+      fontSize: "13.5px",
+      fontWeight: 700,
+      color: COLORI.ink,
+      cursor: "pointer",
+      textTransform: "capitalize",
+      fontFamily: "inherit",
+    },
+    datePickerAnniRiga: {
+      display: "flex",
+      gap: "6px",
+      justifyContent: "center",
+      marginBottom: "10px",
+    },
+    datePickerAnnoBtn: (attivo) => ({
+      border: "none",
+      background: attivo ? COLORI.teal : COLORI.mist,
+      color: attivo ? "white" : COLORI.ink,
+      borderRadius: "8px",
+      padding: "6px 10px",
+      fontSize: "12px",
+      fontWeight: 600,
+      cursor: "pointer",
+      fontFamily: "inherit",
+    }),
+    datePickerGrigliaSettimana: {
+      display: "grid",
+      gridTemplateColumns: "repeat(7, 1fr)",
+      marginBottom: "4px",
+    },
+    datePickerGiornoSettimana: {
+      textAlign: "center",
+      fontSize: "9.5px",
+      fontWeight: 700,
+      color: COLORI.muted,
+      textTransform: "uppercase",
+    },
+    datePickerGriglia: {
+      display: "grid",
+      gridTemplateColumns: "repeat(7, 1fr)",
+      gap: "2px",
+    },
+    datePickerGiorno: (fuoriMese, selezionato) => ({
+      border: "none",
+      background: selezionato ? COLORI.teal : "transparent",
+      color: selezionato ? "white" : fuoriMese ? COLORI.hairlineForte : COLORI.ink,
+      borderRadius: "8px",
+      height: "30px",
+      fontSize: "12px",
+      fontWeight: selezionato ? 700 : 500,
+      cursor: "pointer",
+      fontFamily: "inherit",
+    }),
+    gruppoOra: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+      background: COLORI.card,
+      border: `1px solid ${COLORI.hairlineForte}`,
+      borderRadius: "10px",
+      padding: "3px 8px",
+    },
+    selectOra: {
+      border: "none",
+      background: "transparent",
+      fontSize: "13px",
+      fontFamily: "inherit",
+      color: COLORI.ink,
+      cursor: "pointer",
+      padding: "7px 2px",
+    },
+    grigliaMensile: {
+      display: "grid",
+      gridTemplateColumns: "repeat(7, 1fr)",
+      gap: "6px",
+      marginTop: "12px",
+    },
+    grigliaMensileIntestazione: {
+      textAlign: "center",
+      fontSize: "10.5px",
+      fontWeight: 700,
+      color: COLORI.muted,
+      textTransform: "uppercase",
+      letterSpacing: "0.03em",
+      paddingBottom: "4px",
+    },
+    cellaGiornoMensile: (fuoriMese, eOggi) => ({
+      minHeight: "76px",
+      borderRadius: "12px",
+      padding: "8px",
+      background: eOggi ? hexRgba(COLORI.teal, 0.08) : fuoriMese ? "transparent" : COLORI.mist,
+      border: eOggi ? `1.5px solid ${COLORI.teal}` : "1px solid transparent",
+      opacity: fuoriMese ? 0.35 : 1,
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+    }),
+    rigaCollega: (selezionata, disabilitata) => ({
+      display: "flex",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: "6px 10px",
+      padding: "10px 12px",
+      borderRadius: "12px",
+      background: selezionata ? hexRgba(COLORI.teal, 0.1) : COLORI.mist,
+      border: selezionata ? `1.5px solid ${COLORI.teal}` : "1.5px solid transparent",
+      cursor: disabilitata ? "not-allowed" : "pointer",
+      opacity: disabilitata ? 0.55 : 1,
+      width: "100%",
+      textAlign: "left",
+      fontFamily: "inherit",
+      marginBottom: "6px",
+    }),
+    rigaRegola: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "14px",
+      padding: "12px 0",
+      borderBottom: `1px solid ${COLORI.hairline}`,
+    },
+    toggleTraccia: (attivo) => ({
+      width: "40px",
+      height: "22px",
+      borderRadius: "999px",
+      background: attivo ? COLORI.teal : COLORI.hairlineForte,
+      border: "none",
+      cursor: "pointer",
+      position: "relative",
+      flexShrink: 0,
+      padding: 0,
+    }),
+    toggleCerchio: (attivo) => ({
+      position: "absolute",
+      top: "2px",
+      left: attivo ? "20px" : "2px",
+      width: "18px",
+      height: "18px",
+      borderRadius: "50%",
+      background: "white",
+      transition: "left 0.15s ease",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+    }),
+    button: {
+      background: COLORI.teal,
+      color: "white",
+      border: "none",
+      padding: "10px 20px",
+      borderRadius: "10px",
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: "13px",
+      fontFamily: "inherit",
+    },
+    buttonSecondary: {
+      background: COLORI.mist,
+      color: COLORI.ink,
+      border: "none",
+      padding: "9px 18px",
+      borderRadius: "10px",
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: "13px",
+      fontFamily: "inherit",
+    },
+    iconBtn: {
+      border: "none",
+      background: "transparent",
+      cursor: "pointer",
+      padding: "8px",
+      borderRadius: "50%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    badgeNotifiche: {
+      position: "absolute",
+      top: "2px",
+      right: "2px",
+      minWidth: "15px",
+      height: "15px",
+      padding: "0 3px",
+      borderRadius: "999px",
+      background: "#D64545",
+      color: "white",
+      fontSize: "9.5px",
+      fontWeight: 700,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      lineHeight: 1,
+      boxShadow: "0 0 0 2px #fff",
+    },
+    pannelloNotifiche: (isMobile) => ({
+      position: "absolute",
+      top: "calc(100% + 8px)",
+      right: isMobile ? "-70px" : 0,
+      width: isMobile ? "260px" : "320px",
+      maxHeight: "360px",
+      overflowY: "auto",
+      background: COLORI.card,
+      borderRadius: "14px",
+      boxShadow: "0 12px 32px rgba(28,30,46,0.18)",
+      zIndex: 50,
+      padding: "8px",
+    }),
+    rigaNotifica: {
+      display: "flex",
+      gap: "8px",
+      alignItems: "flex-start",
+      padding: "9px 10px",
+      borderRadius: "10px",
+      background: COLORI.mist,
+      marginBottom: "6px",
+      fontSize: "12.5px",
+      color: COLORI.ink,
+      lineHeight: 1.4,
+    },
+    navFreccia: {
+      background: COLORI.mist,
+      color: COLORI.ink,
+      border: "none",
+      width: "36px",
+      height: "36px",
+      borderRadius: "50%",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      fontSize: "15px",
+      fontWeight: 600,
+      fontFamily: "inherit",
+      flexShrink: 0,
+    },
+    statoPill: (stato) => ({
+      padding: "5px 14px",
+      borderRadius: "999px",
+      fontSize: "11.5px",
+      fontWeight: 700,
+      letterSpacing: "0.02em",
+      background: stato === "bozza" ? COLORI.bozzaBg : COLORI.definitivoBg,
+      color: stato === "bozza" ? COLORI.bozzaTesto : COLORI.definitivoTesto,
+    }),
+    avviso: {
+      marginTop: "10px",
+      background: COLORI.avvisoBg,
+      border: `1px solid ${COLORI.avvisoBordo}`,
+      borderRadius: "8px",
+      padding: "12px 14px",
+    },
+    avvisoTitolo: { fontSize: "12.5px", color: COLORI.avvisoTesto, fontWeight: 700 },
+    avvisoLieve: {
+      marginTop: "10px",
+      background: "#EAF1F1",
+      border: `1px solid #BFD6D6`,
+      borderRadius: "8px",
+      padding: "12px 14px",
+    },
+    avvisoLieveTitolo: { fontSize: "12.5px", color: COLORI.tealScuro, fontWeight: 700 },
+    label: { fontSize: "11.5px", display: "block", color: COLORI.muted, fontWeight: 600, marginBottom: "3px", textTransform: "uppercase", letterSpacing: "0.03em" },
+  };
+
+  // ---------- Login screen ----------
+
+  if (!utenteLoggato) {
+    return (
+      <div className="planner-turni-app" style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", boxSizing: "border-box" }}>
+        <style>{GLOBAL_STYLE}</style>
+        <div style={{ ...styles.card, width: "100%", maxWidth: "340px", boxSizing: "border-box", textAlign: "center" }}>
+          <img src={logoPlannerTurni} alt="Planner Turni" style={{ width: "100%", maxWidth: "280px", height: "auto", margin: "0 auto 18px" }} />
+          <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: 0, marginBottom: "20px" }}>
+            Bozza dimostrativa — seleziona il tuo nome e inserisci il PIN di prova.
+          </p>
+          <div style={{ marginBottom: "12px", textAlign: "left" }}>
+            <label style={styles.label}>Dipendente</label>
+            <select
+              style={styles.input}
+              value={loginEmpId}
+              onChange={(e) => setLoginEmpId(e.target.value)}
+            >
+              <option value="">Seleziona...</option>
+              {dipendenti.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.cognome} {d.nome} {(d.tipo === "direttore" || d.tipo === "fom") ? "(admin)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ marginBottom: "16px", textAlign: "left" }}>
+            <label style={styles.label}>PIN</label>
+            <input
+              style={styles.input}
+              type="password"
+              value={loginPin}
+              onChange={(e) => setLoginPin(e.target.value)}
+              placeholder="es. 1111"
+            />
+          </div>
+          {loginErrore && <p style={{ color: COLORI.avvisoTesto, fontSize: "12px" }}>{loginErrore}</p>}
+          <button style={{ ...styles.button, width: "100%" }} onClick={handleLogin}>
+            Entra
+          </button>
+          <p style={{ fontSize: "10.5px", color: COLORI.muted, marginTop: "16px", lineHeight: 1.6 }}>
+            PIN di prova: 1111 (Matteo, Direttore/admin), 4444 (Chiara, FOM/admin), 2222 (Ana Beatrice), 3333 (Rima), 5555 (Francesco), 6666 (Omar), 7777 (Romana), 8888 (Raoul), 9999 (Kevin), 1010 (Constantin).
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const empCorrente = dipendenti.find((d) => d.id === utenteLoggato.id);
+
+  const notifiche = calcolaNotifiche({ empCorrente, isAdmin, richiesteSwap, richiesteAssenza, richiestePreassegnazione, dipendenti });
+  const idNotificheLette = new Set(notificheLette[empCorrente?.id] ?? []);
+  const notificheNonLette = notifiche.filter((n) => !idNotificheLette.has(n.id)).length;
+
+  function toggleNotifiche() {
+    setPannelloNotificheAperto((prev) => {
+      const next = !prev;
+      if (next) {
+        setNotificheLette((letturePrev) => ({ ...letturePrev, [empCorrente.id]: notifiche.map((n) => n.id) }));
+      }
+      return next;
+    });
+  }
+
+  return (
+    <div className="planner-turni-app" style={styles.page}>
+      <style>{GLOBAL_STYLE}</style>
+      <div style={styles.header}>
+        <div style={styles.logoRow}>
+          <img src={logoIcona} alt="Planner Turni" style={{ width: isMobile ? "34px" : "44px", height: isMobile ? "34px" : "44px", flexShrink: 0 }} />
+          <div>
+            <h1 style={styles.title}>Ciao, {empCorrente?.nome?.split(" ")[0]}</h1>
+            <div style={styles.subtitle}>{TIPI_DIPENDENTE[empCorrente?.tipo]?.label} · {nomeMese}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px" }}>
+          <div
+            title={`${empCorrente?.cognome} ${empCorrente?.nome}${isAdmin ? " · Admin" : ""}`}
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "50%",
+              background: empCorrente?.colore,
+              color: testoContrastante(empCorrente?.colore || "#000000"),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 700,
+              fontSize: "13px",
+            }}
+          >
+            {empCorrente?.nome?.[0]}{empCorrente?.cognome?.[0]}
+          </div>
+
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={toggleNotifiche}
+              title="Notifiche"
+              style={styles.iconBtn}
+            >
+              <IconCampanella dimensione={19} colore={COLORI.muted} />
+              {notificheNonLette > 0 && (
+                <span style={styles.badgeNotifiche}>{notificheNonLette > 9 ? "9+" : notificheNonLette}</span>
+              )}
+            </button>
+            {pannelloNotificheAperto && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setPannelloNotificheAperto(false)} />
+                <div style={styles.pannelloNotifiche(isMobile)}>
+                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 8px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    Notifiche
+                  </div>
+                  {notifiche.length === 0 ? (
+                    <p style={{ fontSize: "13px", color: COLORI.muted, padding: "6px 8px 10px" }}>Nessuna notifica.</p>
+                  ) : (
+                    notifiche.map((n) => (
+                      <div key={n.id} style={styles.rigaNotifica}>
+                        <span style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          marginTop: "4px",
+                          flexShrink: 0,
+                          background: n.positivo === true ? "#2E9B5C" : n.positivo === false ? "#D64545" : "#C99A3B",
+                        }} />
+                        <span>{n.testo}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <button type="button" onClick={handleLogout} title="Esci" style={styles.iconBtn}>
+            <IconEsci dimensione={18} colore={COLORI.muted} />
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.navWrapper}>
+        <div className="ptn-nav-scroll" style={styles.nav}>
+          <button style={styles.navBtn(tab === "calendario")} onClick={() => setTab("calendario")}>Calendario</button>
+          <button style={styles.navBtn(tab === "mieiturni")} onClick={() => setTab("mieiturni")}>I miei turni</button>
+          {isAdmin && <button style={styles.navBtn(tab === "dipendenti")} onClick={() => setTab("dipendenti")}>Dipendenti</button>}
+          {isAdmin && <button style={styles.navBtn(tab === "copertura")} onClick={() => setTab("copertura")}>Regole copertura</button>}
+          <button style={styles.navBtn(tab === "preferenze")} onClick={() => setTab("preferenze")}>Le mie preferenze</button>
+          <button style={styles.navBtn(tab === "swap")} onClick={() => setTab("swap")}>Cambi turno</button>
+          <button style={styles.navBtn(tab === "assenze")} onClick={() => setTab("assenze")}>Ferie / Permessi</button>
+          <button style={styles.navBtn(tab === "preassegnazioni")} onClick={() => setTab("preassegnazioni")}>Pre-assegnazioni</button>
+        </div>
+      </div>
+
+      <div style={styles.container}>
+        {tab === "calendario" && (
+          <>
+            <div style={styles.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <button
+                    style={styles.navFreccia}
+                    onClick={() => {
+                      const { anno: a, mese: m } = mesePrecedente(anno, mese);
+                      setAnno(a);
+                      setMese(m);
+                    }}
+                  >
+                    ←
+                  </button>
+                  <strong style={{ textTransform: "capitalize", fontFamily: "'Roboto', sans-serif", fontSize: "16px", fontWeight: 600 }}>{nomeMese}</strong>
+                  <button
+                    style={styles.navFreccia}
+                    onClick={() => {
+                      const { anno: a, mese: m } = meseSuccessivo(anno, mese);
+                      setAnno(a);
+                      setMese(m);
+                    }}
+                  >
+                    →
+                  </button>
+                  <span style={styles.statoPill(statoMese)}>{statoMese === "bozza" ? "Bozza" : "Definitivo"}</span>
+                </div>
+                {isAdmin && (
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <button
+                      style={{ ...styles.button, ...(statoMese === "definitivo" ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                      onClick={assegnaAutomaticamente}
+                      disabled={statoMese === "definitivo"}
+                      title={statoMese === "definitivo" ? "Il mese è Definitivo: riporta a Bozza per rigenerare" : ""}
+                    >
+                      Assegna automaticamente
+                    </button>
+                    <button
+                      style={styles.buttonSecondary}
+                      onClick={() => {
+                        impostaRiposiMesiSuccessivi(12);
+                        alert("Riposi impostati per i 12 mesi successivi (turni di copertura esclusi).");
+                      }}
+                    >
+                      Imposta riposi mesi successivi
+                    </button>
+                    <button
+                      style={styles.buttonSecondary}
+                      onClick={toggleStatoMese}
+                    >
+                      {statoMese === "bozza" ? "Rendi Definitivo" : "Riporta a Bozza"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "8px" }}>
+                Lo stato Bozza/Definitivo riguarda solo {nomeMese}: ogni mese ha il proprio stato indipendente. "Assegna automaticamente" genera i turni solo per {nomeMese}: gli altri mesi non vengono toccati. Ogni click riparte da zero (i turni bloccati con 🔒 restano fissi, il resto viene ricalcolato e può variare). "Imposta riposi mesi successivi" pre-compila solo i giorni di riposo (non i turni di copertura) per i 12 mesi dopo quello visualizzato, applicando la stessa regola di rotazione — utile per fissare in anticipo i weekend/riposi anche se i turni veri e propri verranno assegnati più avanti.
+              </p>
+
+              {conflitti.length > 0 && (
+                <div style={styles.avviso}>
+                  <strong style={styles.avvisoTitolo}>Conflitti nell'assegnazione automatica</strong>
+                  <ul style={{ fontSize: "12px", margin: "8px 0 0 18px", color: COLORI.ink }}>
+                    {conflitti.map((c, i) => (
+                      <li key={i}>{c.messaggio}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {violazioniSequenza.length > 0 && (
+                <div style={styles.avviso}>
+                  <strong style={styles.avvisoTitolo}>Sequenza da evitare (C2 seguito da A1)</strong>
+                  <ul style={{ fontSize: "12px", margin: "8px 0 0 18px", color: COLORI.ink }}>
+                    {violazioniSequenza.map((v, i) => {
+                      const emp = dipendenti.find((d) => d.id === v.empId);
+                      return (
+                        <li key={i}>
+                          {emp?.cognome}: C2 il {formattaData(v.giorno, mese, anno)}, A1 il {formattaData(v.giorno + 1, mese, anno)}. Modifica uno dei due turni.
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              <div style={{ overflowX: "auto", marginTop: "16px", borderRadius: "8px" }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...styles.th, position: "sticky", left: 0, zIndex: 2, textAlign: "left" }}>Dipendente</th>
+                      {giorniArray.map((g) => (
+                        <th key={g} style={{ ...styles.th, ...(eWeekend(anno, mese, g) ? styles.thWeekend : {}) }}>
+                          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: "12px", color: COLORI.ink }}>{g}</div>
+                          <div style={{ fontSize: "9px", fontWeight: 400 }}>{nomeGiorno(anno, mese, g)}</div>
+                        </th>
+                      ))}
+                      <th style={styles.th}>Gg lav.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dipendenti.map((d) => (
+                      <tr key={d.id}>
+                        <td style={{ ...styles.tdEmp, borderLeft: "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <AvatarDipendente d={d} dimensione={26} />
+                            <div>
+                              {d.cognome} {d.nome}
+                              <div style={{ fontSize: "10px", fontWeight: 500, color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                {TIPI_DIPENDENTE[d.tipo].label}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        {giorniArray.map((g) => {
+                          const t = turni[kt(d.id, g)];
+                          const weekend = eWeekend(anno, mese, g);
+                          const selezionata = cellaSelezionata && cellaSelezionata.empId === d.id && cellaSelezionata.giorno === g;
+                          const coloreTurno = t ? (TIPI_TURNO[t.code]?.colore || COLORI.muted) : null;
+                          return (
+                            <td
+                              key={g}
+                              className={isAdmin ? "cella-turno-editabile" : undefined}
+                              style={{
+                                ...styles.tdCell,
+                                ...(weekend ? styles.tdCellWeekend : {}),
+                                ...(selezionata ? styles.tdCellSelezionata : {}),
+                                ...(selezionata && !t ? styles.tdCellSelezionataVuota : {}),
+                              }}
+                              onClick={() => {
+                                if (!isAdmin) return;
+                                setCellaSelezionata({ empId: d.id, giorno: g });
+                              }}
+                              title={t?.dnm ? "Turno bloccato (Do Not Move)" : ""}
+                            >
+                              {t ? (
+                                <span style={styles.badgeCalendario(coloreTurno)}>
+                                  {t.code}
+                                  {t.dnm && <IconLucchetto dimensione={8} colore={testoContrastante(coloreTurno)} style={{ marginLeft: "2px" }} />}
+                                </span>
+                              ) : (
+                                ""
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td style={{ textAlign: "center", fontWeight: 700, fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>{riepilogoOre[d.id] || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ marginTop: "16px", fontSize: "11px", color: COLORI.muted, display: "flex", flexWrap: "wrap", gap: "10px 14px" }}>
+                {Object.entries(TIPI_TURNO).map(([k, v]) => (
+                  <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <span style={styles.badge(v.colore)}>{k}</span> {v.label} {v.orario && `(${v.orario})`}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {isAdmin && cellaSelezionata && (
+              <div style={styles.card}>
+                <h3 style={styles.sectionTitle}>
+                  Modifica turno — {dipendenti.find((d) => d.id === cellaSelezionata.empId)?.cognome}, {formattaData(cellaSelezionata.giorno, mese, anno)}
+                </h3>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", margin: "14px 0" }}>
+                  {Object.keys(TIPI_TURNO).map((code) => (
+                    <button
+                      key={code}
+                      style={{
+                        ...styles.buttonSecondary,
+                        background: TIPI_TURNO[code].colore,
+                        color: testoContrastante(TIPI_TURNO[code].colore),
+                        border: "none",
+                        borderRadius: "8px",
+                        fontWeight: 700,
+                      }}
+                      onClick={() => impostaTurno(cellaSelezionata.empId, cellaSelezionata.giorno, code)}
+                    >
+                      {code}
+                    </button>
+                  ))}
+                  <button style={styles.buttonSecondary} onClick={() => impostaTurno(cellaSelezionata.empId, cellaSelezionata.giorno, null)}>
+                    Svuota
+                  </button>
+                </div>
+                <CheckboxPersonalizzata
+                  checked={!!turni[kt(cellaSelezionata.empId, cellaSelezionata.giorno)]?.dnm}
+                  onChange={() => toggleDNM(cellaSelezionata.empId, cellaSelezionata.giorno)}
+                  label={<><IconLucchetto dimensione={12} colore={COLORI.ink} style={{ marginRight: "4px" }} />Do Not Move (turno bloccato, non modificabile né scambiabile — resta fisso anche rigenerando l'assegnazione automatica)</>}
+                />
+                <div style={{ marginTop: "14px" }}>
+                  <button style={styles.buttonSecondary} onClick={() => setCellaSelezionata(null)}>Chiudi</button>
+                </div>
+              </div>
+            )}
+
+            {isAdmin && avvisiSequenzaPreferibile.length > 0 && (
+              <div style={styles.card}>
+                <div style={styles.avvisoLieve}>
+                  <strong style={styles.avvisoLieveTitolo}>Sequenza da preferire diversamente (non bloccante)</strong>
+                  <p style={{ fontSize: "11px", color: COLORI.muted, margin: "4px 0 12px" }}>
+                    Visibile solo agli admin. "Correggi" scambia o riassegna automaticamente il turno per risolvere, senza lasciare nessuno scoperto.
+                  </p>
+                  {Object.entries(
+                    avvisiSequenzaPreferibile.reduce((acc, v) => {
+                      (acc[v.empId] = acc[v.empId] || []).push(v);
+                      return acc;
+                    }, {})
+                  ).map(([empId, elenco]) => {
+                    const emp = dipendenti.find((d) => d.id === Number(empId));
+                    return (
+                      <div key={empId} style={{ marginBottom: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                          {emp && <AvatarDipendente d={emp} dimensione={20} />}
+                          <strong style={{ fontSize: "12.5px", color: COLORI.ink }}>{emp?.cognome} {emp?.nome}</strong>
+                        </div>
+                        <ul style={{ fontSize: "12px", margin: 0, padding: 0, listStyle: "none", color: COLORI.ink }}>
+                          {elenco.map((v, i) => (
+                            <li key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", padding: "5px 0 5px 28px" }}>
+                              <span>{v.oggi} il {formattaData(v.giorno, mese, anno)} → {v.domani} il {formattaData(v.giorno + 1, mese, anno)}</span>
+                              <button
+                                style={{ ...styles.buttonSecondary, padding: "4px 12px", fontSize: "11px" }}
+                                title="Scambia o riassegna automaticamente per risolvere, senza lasciare il turno scoperto"
+                                onClick={() => correggiSequenza(v)}
+                              >
+                                Correggi
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={styles.card}>
+              <h3 style={styles.sectionTitle}>Riepilogo turni per tipo — {nomeMese}</h3>
+              <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: "4px", marginBottom: "12px" }}>
+                Giorni di A1, A2, C1, C2 e N fatti da ciascun dipendente questo mese — utile per verificare l'equilibrio tra mattine e pomeriggi/sere.
+              </p>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ ...styles.table, fontSize: "13px" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...styles.th, textAlign: "left" }}>Dipendente</th>
+                      {CODICI_RECAP.map((code) => (
+                        <th key={code} style={styles.th}>
+                          <span style={styles.badge(TIPI_TURNO[code].colore)}>{code}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dipendenti.map((d) => (
+                      <tr key={d.id}>
+                        <td style={{ padding: "8px 10px", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <AvatarDipendente d={d} dimensione={24} />
+                            {d.cognome} {d.nome}
+                          </div>
+                        </td>
+                        {CODICI_RECAP.map((code) => (
+                          <td key={code} style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                            {recapTurniTipo[d.id]?.[code] || 0}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === "mieiturni" && (
+          <div style={styles.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+              <div>
+                <h3 style={styles.sectionTitle}>I miei turni</h3>
+                <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: "2px" }}>
+                  {empCorrente?.cognome} {empCorrente?.nome} · {TIPI_DIPENDENTE[empCorrente?.tipo]?.label}
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button
+                  style={styles.navFreccia}
+                  onClick={() => {
+                    if (meseMiei === 0) { setMeseMiei(11); setAnnoMiei((a) => a - 1); }
+                    else setMeseMiei((m) => m - 1);
+                  }}
+                >
+                  ←
+                </button>
+                <strong style={{ textTransform: "capitalize", fontSize: "16px", fontWeight: 700 }}>
+                  {new Date(annoMiei, meseMiei, 1).toLocaleDateString("it-IT", { month: "long", year: "numeric" })}
+                </strong>
+                <button
+                  style={styles.navFreccia}
+                  onClick={() => {
+                    if (meseMiei === 11) { setMeseMiei(0); setAnnoMiei((a) => a + 1); }
+                    else setMeseMiei((m) => m + 1);
+                  }}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.grigliaMensile}>
+              {GIORNI_SETTIMANA.map((g) => (
+                <div key={g} style={styles.grigliaMensileIntestazione}>{g}</div>
+              ))}
+              {generaGrigliaMese(annoMiei, meseMiei).map((cella, i) => {
+                const oggiReale = new Date();
+                const eOggi = !cella.fuoriMese && cella.anno === oggiReale.getFullYear() && cella.mese === oggiReale.getMonth() && cella.giorno === oggiReale.getDate();
+                const t = empCorrente ? turni[keyTurno(empCorrente.id, cella.anno, cella.mese, cella.giorno)] : null;
+                const coloreTurno = t && !cella.fuoriMese ? (TIPI_TURNO[t.code]?.colore || COLORI.muted) : null;
+                return (
+                  <div key={i} style={styles.cellaGiornoMensile(cella.fuoriMese, eOggi)}>
+                    <span style={{ fontSize: "11px", fontWeight: eOggi ? 700 : 500, color: eOggi ? COLORI.teal : COLORI.muted, fontFamily: "ui-monospace, monospace" }}>
+                      {cella.giorno}
+                    </span>
+                    {t && !cella.fuoriMese && (
+                      <span style={styles.badgeCalendario(coloreTurno)}>
+                        {t.code}{t.dnm && <IconLucchetto dimensione={8} colore={testoContrastante(coloreTurno)} style={{ marginLeft: "2px" }} />}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: "18px", display: "flex", flexWrap: "wrap", gap: "10px 14px" }}>
+              {Object.entries(TIPI_TURNO).map(([k, v]) => (
+                <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", color: COLORI.muted }}>
+                  <span style={styles.badge(v.colore)}>{k}</span> {v.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === "dipendenti" && isAdmin && (
+          <SchedaDipendenti dipendenti={dipendenti} turni={turni} onSalva={setDipendenti} styles={styles} />
+        )}
+
+        {tab === "copertura" && isAdmin && (
+          <>
+            <div style={styles.card}>
+              <h3 style={styles.sectionTitle}>Regole di copertura giornaliera</h3>
+              <p style={{ fontSize: "13px", color: COLORI.muted, marginTop: "6px" }}>
+                Numero di dipendenti richiesti per ciascun turno, ogni giorno. Modifica le quantità o aggiungi/rimuovi turni dalla copertura richiesta.
+              </p>
+
+              <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginTop: "16px" }}>
+                {Object.entries(coperturaRegole).map(([code, qty]) => (
+                  <div key={code} style={{ background: COLORI.mist, borderRadius: "14px", padding: "14px 16px", textAlign: "center", minWidth: "92px", position: "relative" }}>
+                    <button
+                      onClick={() => rimuoviRegolaCopertura(code)}
+                      title="Rimuovi questa regola"
+                      style={{ position: "absolute", top: "6px", right: "6px", border: "none", background: "transparent", color: COLORI.muted, cursor: "pointer", fontSize: "13px", lineHeight: 1, padding: "2px" }}
+                    >
+                      ✕
+                    </button>
+                    <span style={styles.badge(TIPI_TURNO[code]?.colore || COLORI.muted)}>{code}</span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "8px" }}>
+                      <button style={styles.datePickerFreccia} onClick={() => aggiornaQuantitaRegola(code, qty - 1)}>−</button>
+                      <span style={{ fontSize: "20px", fontWeight: 700, fontFamily: "'Roboto', sans-serif", minWidth: "18px" }}>{qty}</span>
+                      <button style={styles.datePickerFreccia} onClick={() => aggiornaQuantitaRegola(code, qty + 1)}>+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: `1px solid ${COLORI.hairline}` }}>
+                <label style={styles.label}>Aggiungi regola</label>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "6px" }}>
+                  <select style={styles.select} value={nuovoCodiceRegola} onChange={(e) => setNuovoCodiceRegola(e.target.value)}>
+                    <option value="">Seleziona turno...</option>
+                    {Object.keys(TIPI_TURNO)
+                      .filter((c) => !["R", "F", "P", "D1", "D2", "F1", "F2"].includes(c) && coperturaRegole[c] === undefined)
+                      .map((c) => (
+                        <option key={c} value={c}>{c} — {TIPI_TURNO[c].label}</option>
+                      ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    max="9"
+                    style={{ ...styles.input, width: "70px" }}
+                    value={nuovaQuantitaRegola}
+                    onChange={(e) => setNuovaQuantitaRegola(Number(e.target.value))}
+                  />
+                  <button
+                    style={styles.button}
+                    disabled={!nuovoCodiceRegola}
+                    onClick={() => {
+                      aggiungiRegolaCopertura(nuovoCodiceRegola, nuovaQuantitaRegola);
+                      setNuovoCodiceRegola("");
+                      setNuovaQuantitaRegola(1);
+                    }}
+                  >
+                    Aggiungi
+                  </button>
+                </div>
+                <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "8px" }}>
+                  D1/D2/F1/F2 non sono aggiungibili qui: sono gestiti automaticamente in base a chi è Direttore/FOM (vedi le regole sotto). Bozza: le quantità sono uguali per tutti i giorni del mese, non ancora personalizzabili giorno per giorno.
+                </p>
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <h3 style={styles.sectionTitle}>Regole assolute</h3>
+              <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: "4px", marginBottom: "6px" }}>
+                Vincoli rigidi e indipendenti tra loro: se disattivate, l'assegnazione automatica smette di applicarle senza eccezioni. Non hanno un ordine di priorità da spostare (a differenza delle regole di preferenza sotto): sono controlli distinti, non criteri in competizione fra loro.
+              </p>
+              <div>
+                {[
+                  { chiave: "sequenzaC2A1Vietata", testo: <><strong>Sequenza vietata:</strong> un turno C2 non è mai seguito da A1 il giorno dopo.</> },
+                  { chiave: "prioritaNotturno", testo: <><strong>Priorità sulla notte (N):</strong> sempre al notturno titolare; il turnante copre solo quando il notturno è a riposo/ferie e solo nei suoi ultimi 2 giorni di lavoro prima del riposo; se anche il turnante non può, tocca al backup.</> },
+                  { chiave: "riposoTurnanteDopoNotturno", testo: <><strong>Riposo del turnante:</strong> riposa sempre subito DOPO il notturno (stessa coppia di giorni, spostata di uno).</> },
+                  { chiave: "direttoreD1D2Auto", testo: <><strong>Direzione (D1/D2):</strong> nei giorni non di riposo, il Direttore fa sempre automaticamente D1 o D2, alternati per equilibrio.</> },
+                  { chiave: "fomF1F2Auto", testo: <><strong>FOM (F1/F2):</strong> nei giorni non di riposo, la FOM fa F1 o F2 — a meno che quel giorno non serva come riserva per un turno diurno scoperto.</> },
+                  { chiave: "ceAutomatico", testo: <><strong>Turno Centrale (CE):</strong> assegnato automaticamente ai diurni/turnanti che restano liberi quel giorno, una volta coperti tutti gli altri turni.</> },
+                ].map(({ chiave, testo }) => (
+                  <div key={chiave} style={styles.rigaRegola}>
+                    <span style={{ fontSize: "13px", lineHeight: 1.6, color: COLORI.ink }}>{testo}</span>
+                    <button style={styles.toggleTraccia(regoleAttive[chiave])} onClick={() => toggleRegola(chiave)}>
+                      <span style={styles.toggleCerchio(regoleAttive[chiave])} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.card}>
+              <h3 style={styles.sectionTitle}>Regole di preferenza</h3>
+              <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: "4px", marginBottom: "6px" }}>
+                Criteri di equilibrio: usati in ordine per scegliere fra più candidati validi (ma non bloccano mai una copertura se disattivati). Usa le frecce per cambiare quale criterio ha la precedenza.
+              </p>
+              <div>
+                {ordineRegolePreferenza.map((chiave, indice) => {
+                  const TESTI_REGOLA_PREFERENZA = {
+                    sequenzaPreferibileEvitata: <><strong>Sequenza da evitare:</strong> C1→A1 e C2→A2 vengono evitate quando possibile, usate solo se non c'è alternativa.</>,
+                    equitaSequenzeScomode: <><strong>Equità sulle sequenze scomode:</strong> chi ha ricevuto meno C1→A1/C2→A2 finora nel mese viene preferito.</>,
+                    equilibrioMattinaPomeriggio: <><strong>Equilibrio mattina/pomeriggio:</strong> la distribuzione di mattine (A1/A2) e pomeriggi/sere (C1/C2) viene bilanciata nel corso del mese.</>,
+                    variazioneSettimanale: <><strong>Variazione settimanale:</strong> evita di assegnare lo stesso turno più volte alla stessa persona nella stessa settimana.</>,
+                    preferenzePersonali: <><strong>Preferenze personali:</strong> tiene conto dell'ordine di preferenza turni indicato da ciascun dipendente.</>,
+                  };
+                  return (
+                    <div key={chiave} style={styles.rigaRegola}>
+                      <span style={{ fontSize: "11px", fontWeight: 700, color: COLORI.muted, width: "18px", flexShrink: 0 }}>{indice + 1}°</span>
+                      <span style={{ fontSize: "13px", lineHeight: 1.6, color: COLORI.ink, flex: 1 }}>{TESTI_REGOLA_PREFERENZA[chiave]}</span>
+                      <button
+                        style={{ border: "none", background: COLORI.mist, borderRadius: "6px", width: "24px", height: "24px", cursor: indice === 0 ? "default" : "pointer", opacity: indice === 0 ? 0.4 : 1, marginRight: "4px" }}
+                        onClick={() => spostaRegolaPreferenza(chiave, -1)}
+                        disabled={indice === 0}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        style={{ border: "none", background: COLORI.mist, borderRadius: "6px", width: "24px", height: "24px", cursor: indice === ordineRegolePreferenza.length - 1 ? "default" : "pointer", opacity: indice === ordineRegolePreferenza.length - 1 ? 0.4 : 1, marginRight: "10px" }}
+                        onClick={() => spostaRegolaPreferenza(chiave, 1)}
+                        disabled={indice === ordineRegolePreferenza.length - 1}
+                      >
+                        ↓
+                      </button>
+                      <button style={styles.toggleTraccia(regoleAttive[chiave])} onClick={() => toggleRegola(chiave)}>
+                        <span style={styles.toggleCerchio(regoleAttive[chiave])} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === "preferenze" && (
+          <SchedaPreferenze empCorrente={empCorrente} preferenze={preferenze} onSalva={aggiornaPreferenza} styles={styles} />
+        )}
+
+        {tab === "swap" && (
+          <div style={styles.card}>
+            <h3 style={styles.sectionTitle}>Richiedi cambio turno</h3>
+            <p style={{ fontSize: "13px", color: COLORI.muted, marginTop: "6px" }}>
+              Scegli un giorno e vedi subito il tuo turno e quello di ogni collega quel giorno, per proporre uno scambio in base al turno che ti serve. Resta soggetto a conferma del collega e, a mese Definitivo, dell'admin.
+            </p>
+            <div style={{ marginTop: "14px" }}>
+              <RichiediSwapForm
+                empCorrente={empCorrente}
+                dipendenti={dipendenti}
+                annoCorrente={anno}
+                meseCorrente={mese}
+                turni={turni}
+                richiesteSwap={richiesteSwap}
+                onRichiedi={richiediSwap}
+                keyTurno={keyTurno}
+                styles={styles}
+                onVaiAPreassegnazioni={() => setTab("preassegnazioni")}
+              />
+            </div>
+            <h4 style={{ fontSize: "13px", color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em", marginTop: "20px" }}>Richieste</h4>
+            {richiesteSwap.length === 0 && <p style={{ fontSize: "13px", color: COLORI.muted }}>Nessuna richiesta.</p>}
+            {richiesteSwap.map((r) => {
+              const da = dipendenti.find((d) => d.id === r.daEmpId);
+              const a = dipendenti.find((d) => d.id === r.aEmpId);
+              const riguardaMe = r.aEmpId === empCorrente.id;
+              const ETICHETTE_STATO = {
+                [STATI_SWAP.IN_ATTESA_COLLEGA]: "in attesa del collega",
+                [STATI_SWAP.ACCETTATA_COLLEGA]: "accettata dal collega",
+                [STATI_SWAP.IN_ATTESA_ADMIN]: "in attesa dell'admin (mese Definitivo)",
+                [STATI_SWAP.APPROVATA_ADMIN]: "approvata dall'admin",
+                [STATI_SWAP.APPLICATA]: "applicata",
+                [STATI_SWAP.RIFIUTATA_COLLEGA]: "rifiutata dal collega",
+                [STATI_SWAP.RIFIUTATA_ADMIN]: "rifiutata dall'admin",
+              };
+              return (
+                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${COLORI.hairline}`, fontSize: "13px" }}>
+                  <span>
+                    {da?.cognome} ({formattaData(r.giornoDa, r.meseDa, r.annoDa)}{r.turnoDa ? `, turno ${r.turnoDa}` : ""}) ↔{" "}
+                    {a?.cognome} ({formattaData(r.giornoA, r.meseA, r.annoA)}{r.turnoA ? `, turno ${r.turnoA}` : ""}) — <em style={{ color: COLORI.muted }}>{ETICHETTE_STATO[r.stato] || r.stato}</em>
+                    {r.notaSistema && <><br /><span style={{ fontSize: "11px", color: "#8A4A2B" }}>{r.notaSistema}</span></>}
+                  </span>
+                  {riguardaMe && r.stato === STATI_SWAP.IN_ATTESA_COLLEGA && (
+                    <span style={{ display: "flex", gap: "6px" }}>
+                      <button style={styles.buttonSecondary} onClick={() => rispondiSwapCollega(r.id, true)}>Accetta</button>
+                      <button style={styles.buttonSecondary} onClick={() => rispondiSwapCollega(r.id, false)}>Rifiuta</button>
+                    </span>
+                  )}
+                  {isAdmin && r.stato === STATI_SWAP.IN_ATTESA_ADMIN && (
+                    <span style={{ display: "flex", gap: "6px" }}>
+                      <button style={styles.buttonSecondary} onClick={() => rispondiSwapAdmin(r.id, true)}>Approva</button>
+                      <button style={styles.buttonSecondary} onClick={() => rispondiSwapAdmin(r.id, false)}>Rifiuta</button>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "assenze" && (
+          <div style={styles.card}>
+            <h3 style={styles.sectionTitle}>Ferie e permessi</h3>
+            <p style={{ fontSize: "13px", color: COLORI.muted, marginTop: "6px" }}>
+              Richiedi ferie o un permesso su un giorno specifico, anche di un mese diverso da quello visualizzato nel calendario. Resta soggetto a conferma dell'admin (Direttore o FOM).
+            </p>
+            <div style={{ marginTop: "14px" }}>
+              <RichiediAssenzaForm empCorrente={empCorrente} annoCorrente={anno} meseCorrente={mese} onRichiedi={richiediAssenza} styles={styles} />
+            </div>
+            <h4 style={{ fontSize: "13px", color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em", marginTop: "20px" }}>
+              {isAdmin ? "Tutte le richieste" : "Le mie richieste"}
+            </h4>
+            {richiesteAssenza
+              .filter((r) => isAdmin || r.empId === empCorrente.id)
+              .map((r) => {
+                const emp = dipendenti.find((d) => d.id === r.empId);
+                return (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${COLORI.hairline}`, fontSize: "13px" }}>
+                    <span>
+                      {emp?.cognome} — {r.tipo === "F" ? "Ferie" : "Permesso"}, {formattaData(r.giorno, r.mese, r.anno)}
+                      {r.turnoInteressato ? `, turno ${r.turnoInteressato}` : " (giornata intera)"}
+                      {r.ore ? `, ${r.ore}h` : ""}
+                      {r.oraInizio && r.oraFine ? ` (${r.oraInizio}-${r.oraFine})` : ""}
+                      {r.nota ? <><br /><em style={{ color: COLORI.muted }}>Nota: {r.nota}</em></> : null}
+                      {" — "}<em style={{ color: COLORI.muted }}>{r.stato}</em>
+                    </span>
+                    {isAdmin && r.stato === "in sospeso" && (
+                      <span style={{ display: "flex", gap: "6px" }}>
+                        <button style={styles.buttonSecondary} onClick={() => gestisciAssenza(r.id, "approvata")}>Approva</button>
+                        <button style={styles.buttonSecondary} onClick={() => gestisciAssenza(r.id, "rifiutata")}>Rifiuta</button>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            {richiesteAssenza.filter((r) => isAdmin || r.empId === empCorrente.id).length === 0 && (
+              <p style={{ fontSize: "13px", color: COLORI.muted }}>Nessuna richiesta.</p>
+            )}
+
+            <h4 style={{ fontSize: "13px", color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em", marginTop: "24px" }}>
+              Ferie e permessi rimanenti — {anno}
+            </h4>
+            <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "2px", marginBottom: "10px" }}>
+              Calcolati sulle ferie già impostate a calendario in tutto l'anno e sui permessi con richiesta approvata. Quote annue di bozza (26 giorni ferie, 88 ore permessi): da rendere modificabili in seguito.
+            </p>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ ...styles.table, fontSize: "13px" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...styles.th, textAlign: "left" }}>Dipendente</th>
+                    <th style={styles.th}>Ferie usate</th>
+                    <th style={styles.th}>Ferie residue</th>
+                    <th style={styles.th}>Permessi usati (h)</th>
+                    <th style={styles.th}>Permessi residui (h)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dipendenti.filter((d) => isAdmin || d.id === empCorrente.id).map((d) => {
+                    const r = recapFeriePermessi[d.id] || {};
+                    return (
+                      <tr key={d.id}>
+                        <td style={{ padding: "8px 10px", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <AvatarDipendente d={d} dimensione={24} />
+                            {d.cognome} {d.nome}
+                          </div>
+                        </td>
+                        <td style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>{r.ferieUsate ?? 0}</td>
+                        <td style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>{r.ferieResidue ?? QUOTA_FERIE_DEFAULT}</td>
+                        <td style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>{r.permessiOreUsate ?? 0}</td>
+                        <td style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>{r.permessiOreResidue ?? QUOTA_PERMESSI_ORE_DEFAULT}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === "preassegnazioni" && (
+          <div style={styles.card}>
+            <h3 style={styles.sectionTitle}>Pre-assegnazione turni</h3>
+            <p style={{ fontSize: "13px", color: COLORI.muted, marginTop: "6px" }}>
+              {isAdmin
+                ? "Assegna direttamente un turno specifico (o un giorno libero) a un dipendente, anche di un mese diverso da quello visualizzato: viene applicato subito, senza bisogno di conferma, e si blocca automaticamente (🔒 Do Not Move)."
+                : "Proponi di esserti assegnato un turno specifico (o un giorno libero) in un giorno specifico, anche di un mese diverso da quello visualizzato nel calendario. Resta soggetto a conferma dell'admin (Direttore o FOM); una volta accettata, il turno viene bloccato automaticamente (🔒 Do Not Move)."}
+            </p>
+            <div style={{ marginTop: "14px" }}>
+              <RichiediPreassegnazioneForm empCorrente={empCorrente} dipendenti={dipendenti} isAdmin={isAdmin} annoCorrente={anno} meseCorrente={mese} onRichiedi={richiediPreassegnazione} styles={styles} />
+            </div>
+            <h4 style={{ fontSize: "13px", color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em", marginTop: "20px" }}>
+              {isAdmin ? "Tutte le richieste" : "Le mie richieste"}
+            </h4>
+            {richiestePreassegnazione
+              .filter((r) => isAdmin || r.empId === empCorrente.id)
+              .map((r) => {
+                const emp = dipendenti.find((d) => d.id === r.empId);
+                return (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${COLORI.hairline}`, fontSize: "13px" }}>
+                    <span>
+                      {emp?.cognome} — {r.turno === "LIBERO" ? "giorno libero" : `turno ${r.turno}`}, {formattaData(r.giorno, r.mese, r.anno)}
+                      {r.nota ? <><br /><em style={{ color: COLORI.muted }}>Nota: {r.nota}</em></> : null}
+                      {" — "}<em style={{ color: COLORI.muted }}>{r.stato === "approvata" ? "assegnata" : r.stato}</em>
+                    </span>
+                    {isAdmin && r.stato === "in sospeso" && (
+                      <span style={{ display: "flex", gap: "6px" }}>
+                        <button style={styles.buttonSecondary} onClick={() => gestisciPreassegnazione(r.id, "approvata")}>Approva</button>
+                        <button style={styles.buttonSecondary} onClick={() => gestisciPreassegnazione(r.id, "rifiutata")}>Rifiuta</button>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            {richiestePreassegnazione.filter((r) => isAdmin || r.empId === empCorrente.id).length === 0 && (
+              <p style={{ fontSize: "13px", color: COLORI.muted }}>Nessuna richiesta.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SelettoreOra({ valore, onChange, styles }) {
+  const [oreVal, minVal] = valore ? valore.split(":") : ["", ""];
+  const ORE = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+  const MINUTI = ["00", "15", "30", "45"];
+
+  return (
+    <div style={styles.gruppoOra}>
+      <select
+        style={styles.selectOra}
+        value={oreVal}
+        onChange={(e) => onChange(`${e.target.value}:${minVal || "00"}`)}
+      >
+        <option value="">--</option>
+        {ORE.map((h) => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span style={{ color: COLORI.muted, fontWeight: 700 }}>:</span>
+      <select
+        style={styles.selectOra}
+        value={minVal}
+        onChange={(e) => onChange(`${oreVal || "00"}:${e.target.value}`)}
+      >
+        <option value="">--</option>
+        {MINUTI.map((m) => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function DatePicker({ anno, mese, giorno, onChange, annoCorrente, styles }) {
+  const [aperto, setAperto] = useState(false);
+  const [selettoreAnno, setSelettoreAnno] = useState(false);
+  const [vistaAnno, setVistaAnno] = useState(anno);
+  const [vistaMese, setVistaMese] = useState(mese);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    function chiudiSeFuori(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setAperto(false);
+        setSelettoreAnno(false);
+      }
+    }
+    document.addEventListener("mousedown", chiudiSeFuori);
+    return () => document.removeEventListener("mousedown", chiudiSeFuori);
+  }, []);
+
+  function apri() {
+    setVistaAnno(anno);
+    setVistaMese(mese);
+    setSelettoreAnno(false);
+    setAperto((v) => !v);
+  }
+
+  function meseSuccessivo() {
+    if (vistaMese === 11) { setVistaMese(0); setVistaAnno((a) => a + 1); }
+    else setVistaMese((m) => m + 1);
+  }
+  function mesePrecedente() {
+    if (vistaMese === 0) { setVistaMese(11); setVistaAnno((a) => a - 1); }
+    else setVistaMese((m) => m - 1);
+  }
+
+  const celle = generaGrigliaMese(vistaAnno, vistaMese);
+  const nomeMeseVista = new Date(vistaAnno, vistaMese, 1).toLocaleDateString("it-IT", { month: "long" });
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <button type="button" style={styles.datePickerTrigger} onClick={apri}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={COLORI.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="16" rx="3" />
+          <line x1="3" y1="9.5" x2="21" y2="9.5" />
+          <line x1="7.5" y1="2.5" x2="7.5" y2="6.5" />
+          <line x1="16.5" y1="2.5" x2="16.5" y2="6.5" />
+        </svg>
+        <span>{formattaData(giorno, mese, anno)}</span>
+      </button>
+      {aperto && (
+        <div style={styles.datePickerPannello}>
+          <div style={styles.datePickerHeader}>
+            <button type="button" style={styles.datePickerFreccia} onClick={mesePrecedente}>‹</button>
+            <button type="button" style={styles.datePickerMeseAnno} onClick={() => setSelettoreAnno((v) => !v)}>
+              {nomeMeseVista} {vistaAnno}
+            </button>
+            <button type="button" style={styles.datePickerFreccia} onClick={meseSuccessivo}>›</button>
+          </div>
+
+          {selettoreAnno && (
+            <div style={styles.datePickerAnniRiga}>
+              {[annoCorrente - 1, annoCorrente, annoCorrente + 1].map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  style={styles.datePickerAnnoBtn(a === vistaAnno)}
+                  onClick={() => { setVistaAnno(a); setSelettoreAnno(false); }}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={styles.datePickerGrigliaSettimana}>
+            {GIORNI_SETTIMANA.map((g) => (
+              <div key={g} style={styles.datePickerGiornoSettimana}>{g}</div>
+            ))}
+          </div>
+          <div style={styles.datePickerGriglia}>
+            {celle.map((c, i) => {
+              const selezionato = !c.fuoriMese && c.anno === anno && c.mese === mese && c.giorno === giorno;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  style={styles.datePickerGiorno(c.fuoriMese, selezionato)}
+                  onClick={() => {
+                    onChange(c.anno, c.mese, c.giorno);
+                    setAperto(false);
+                  }}
+                >
+                  {c.giorno}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RichiediSwapForm({ empCorrente, dipendenti, annoCorrente, meseCorrente, turni, richiesteSwap, onRichiedi, keyTurno, styles, onVaiAPreassegnazioni }) {
+  const [anno, setAnno] = useState(annoCorrente);
+  const [mese, setMese] = useState(meseCorrente);
+  const [giorno, setGiorno] = useState(1);
+  const [collega, setCollega] = useState("");
+
+  const giornoSicuro = Math.min(giorno, giorniDelMese(anno, mese));
+
+  const mioTurno = turni[keyTurno(empCorrente.id, anno, mese, giornoSicuro)];
+  const ieri = giornoPrecedente(anno, mese, giornoSicuro);
+  const mioTurnoIeri = turni[keyTurno(empCorrente.id, ieri.anno, ieri.mese, ieri.giorno)];
+
+  const turnoCollega = collega ? turni[keyTurno(Number(collega), anno, mese, giornoSicuro)] : null;
+
+  // quante volte ciascun collega ha accettato/rifiutato una richiesta di cambio ricevuta finora
+  // (conta "applicata" come accettata: è l'esito finale positivo, sia in Bozza che dopo
+  // l'eventuale approvazione admin in Definitivo)
+  function statSwap(empId) {
+    let accettati = 0, rifiutati = 0;
+    (richiesteSwap || []).forEach((r) => {
+      if (r.aEmpId === empId) {
+        if (r.stato === STATI_SWAP.APPLICATA || r.stato === STATI_SWAP.ACCETTATA_COLLEGA || r.stato === STATI_SWAP.APPROVATA_ADMIN) accettati++;
+        if (r.stato === STATI_SWAP.RIFIUTATA_COLLEGA) rifiutati++;
+      }
+    });
+    return { accettati, rifiutati };
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: "6px" }}>
+        <label style={styles.label}>Giorno</label>
+        <p style={{ fontSize: "12px", color: COLORI.muted, margin: "2px 0 0" }}>
+          Scegli la data: sotto vedi subito il tuo turno e quello di ogni collega quel giorno, per scegliere in base al turno che ti serve.
+        </p>
+      </div>
+      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "8px" }}>
+        <DatePicker anno={anno} mese={mese} giorno={giorno} onChange={(a, m, g) => { setAnno(a); setMese(m); setGiorno(g); setCollega(""); }} annoCorrente={annoCorrente} styles={styles} />
+        <div style={{ fontSize: "11px", color: "#6B7680", paddingBottom: "9px" }}>
+          {mioTurno ? <>Il mio turno: {mioTurno.code}{mioTurno.dnm && <IconLucchetto dimensione={9} style={{ marginLeft: "3px" }} />}</> : "Non ho ancora un turno assegnato in questa data"}
+          <br />
+          <span style={{ color: COLORI.muted }}>Il giorno prima: {mioTurnoIeri ? mioTurnoIeri.code : "—"}</span>
+        </div>
+      </div>
+
+      <div style={{ margin: "18px 0 10px" }}>
+        <label style={styles.label}>Con chi vuoi scambiare</label>
+      </div>
+      <div>
+        {dipendenti.filter((d) => d.id !== empCorrente.id).map((d) => {
+          const t = turni[keyTurno(d.id, anno, mese, giornoSicuro)];
+          const tIeri = turni[keyTurno(d.id, ieri.anno, ieri.mese, ieri.giorno)];
+          const { accettati, rifiutati } = statSwap(d.id);
+          const selezionato = collega === String(d.id);
+          const disabilitato = !t || t.dnm;
+          return (
+            <button
+              type="button"
+              key={d.id}
+              style={styles.rigaCollega(selezionato, disabilitato)}
+              disabled={disabilitato}
+              onClick={() => setCollega(String(d.id))}
+            >
+              <AvatarDipendente d={d} dimensione={26} />
+              <span style={{ flex: 1, fontSize: "13px", fontWeight: 600, color: COLORI.ink }}>{d.cognome} {d.nome}</span>
+              <span style={{ fontSize: "11px", color: COLORI.muted, minWidth: "90px" }}>ieri: {tIeri ? tIeri.code : "—"}</span>
+              {t ? (
+                <span style={styles.badge(TIPI_TURNO[t.code]?.colore || COLORI.muted)}>{t.code}{t.dnm ? <IconLucchetto dimensione={9} style={{ marginLeft: "3px" }} /> : ""}</span>
+              ) : (
+                <span style={{ fontSize: "11px", color: COLORI.muted }}>nessun turno</span>
+              )}
+              <span style={{ fontSize: "10.5px", color: COLORI.muted, minWidth: "110px", textAlign: "right" }}>
+                ✓ {accettati} · ✕ {rifiutati}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        style={{ ...styles.button, marginTop: "10px" }}
+        disabled={!collega || !mioTurno || !turnoCollega || mioTurno?.dnm || turnoCollega?.dnm}
+        onClick={() => {
+          onRichiedi(empCorrente.id, anno, mese, giornoSicuro, Number(collega), anno, mese, giornoSicuro);
+          setCollega("");
+        }}
+      >
+        Invia richiesta
+      </button>
+      {(mioTurno?.dnm || turnoCollega?.dnm) && (
+        <p style={{ fontSize: "12px", color: "#8A4A2B", marginTop: "10px" }}>🔒 Uno dei due turni è bloccato, non scambiabile.</p>
+      )}
+      {!mioTurno && (
+        <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <p style={{ fontSize: "12px", color: "#8A4A2B", margin: 0 }}>
+            Non è possibile scambiare un turno che non esiste ancora. Il tuo giorno non ha ancora un turno assegnato: serve prima una pre-assegnazione.
+          </p>
+          {onVaiAPreassegnazioni && (
+            <button type="button" style={styles.buttonSecondary} onClick={onVaiAPreassegnazioni}>
+              Vai a Pre-assegnazioni
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RichiediAssenzaForm({ empCorrente, annoCorrente, meseCorrente, onRichiedi, styles }) {
+  const [anno, setAnno] = useState(annoCorrente);
+  const [mese, setMese] = useState(meseCorrente);
+  const [giorno, setGiorno] = useState(1);
+  const [tipo, setTipo] = useState("F");
+  const [turnoInteressato, setTurnoInteressato] = useState("");
+  const [ore, setOre] = useState("");
+  const [oraInizio, setOraInizio] = useState("");
+  const [oraFine, setOraFine] = useState("");
+  const [nota, setNota] = useState("");
+
+  const turniAmmessi = turniAmmessiDipendente(empCorrente);
+  const numGiorniMese = giorniDelMese(anno, mese);
+  const giornoSicuro = Math.min(giorno, numGiorniMese);
+
+  function invia() {
+    onRichiedi(empCorrente.id, giornoSicuro, anno, mese, tipo, turnoInteressato || null, {
+      ore: ore ? Number(ore) : null,
+      oraInizio,
+      oraFine,
+      nota,
+    });
+    setOre("");
+    setOraInizio("");
+    setOraFine("");
+    setNota("");
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div>
+          <label style={styles.label}>Giorno</label>
+          <DatePicker anno={anno} mese={mese} giorno={giorno} onChange={(a, m, g) => { setAnno(a); setMese(m); setGiorno(g); }} annoCorrente={annoCorrente} styles={styles} />
+        </div>
+        <div>
+          <label style={styles.label}>Tipo</label>
+          <select style={styles.select} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <option value="F">Ferie</option>
+            <option value="P">Permesso</option>
+          </select>
+        </div>
+        <div>
+          <label style={styles.label}>Turno interessato</label>
+          <select style={styles.select} value={turnoInteressato} onChange={(e) => setTurnoInteressato(e.target.value)}>
+            <option value="">Giornata intera</option>
+            {turniAmmessi.map((code) => (
+              <option key={code} value={code}>{code} ({TIPI_TURNO[code].orario})</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "14px" }}>
+        {tipo === "P" && (
+          <>
+            <div>
+              <label style={styles.label}>Ore richieste</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                style={{ ...styles.input, width: "80px" }}
+                value={ore}
+                onChange={(e) => setOre(e.target.value)}
+                placeholder="es. 4"
+              />
+            </div>
+            <div>
+              <label style={styles.label}>Dalle</label>
+              <SelettoreOra valore={oraInizio} onChange={setOraInizio} styles={styles} />
+            </div>
+            <div>
+              <label style={styles.label}>Alle</label>
+              <SelettoreOra valore={oraFine} onChange={setOraFine} styles={styles} />
+            </div>
+          </>
+        )}
+        <div style={{ flex: 1, minWidth: "180px" }}>
+          <label style={styles.label}>Nota (facoltativa)</label>
+          <input
+            type="text"
+            style={styles.input}
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            placeholder="es. visita medica"
+          />
+        </div>
+        <button style={styles.button} onClick={invia}>
+          Invia richiesta
+        </button>
+      </div>
+      <p style={{ fontSize: "11px", color: "#6B7680", marginTop: "10px" }}>
+        Se il permesso copre solo una parte del turno, indica ore e orario e a quale turno si riferisce; altrimenti lascia "Giornata intera".
+      </p>
+    </div>
+  );
+}
+
+function RichiediPreassegnazioneForm({ empCorrente, dipendenti, isAdmin, annoCorrente, meseCorrente, onRichiedi, styles }) {
+  const [empSelezionatoId, setEmpSelezionatoId] = useState(empCorrente.id);
+  const [anno, setAnno] = useState(annoCorrente);
+  const [mese, setMese] = useState(meseCorrente);
+  const [giorno, setGiorno] = useState(1);
+  const [turno, setTurno] = useState("");
+  const [nota, setNota] = useState("");
+
+  const empTarget = isAdmin ? (dipendenti.find((d) => d.id === Number(empSelezionatoId)) || empCorrente) : empCorrente;
+  const turniAmmessi = turniAmmessiDipendente(empTarget);
+  const numGiorniMese = giorniDelMese(anno, mese);
+  const giornoSicuro = Math.min(giorno, numGiorniMese);
+
+  function invia() {
+    if (!turno) return;
+    onRichiedi(empTarget.id, giornoSicuro, anno, mese, turno, nota);
+    setNota("");
+    setTurno("");
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "flex-end" }}>
+        {isAdmin && (
+          <div>
+            <label style={styles.label}>Dipendente</label>
+            <select style={styles.select} value={empSelezionatoId} onChange={(e) => { setEmpSelezionatoId(e.target.value); setTurno(""); }}>
+              {dipendenti.map((d) => (
+                <option key={d.id} value={d.id}>{d.cognome} {d.nome}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label style={styles.label}>Giorno</label>
+          <DatePicker anno={anno} mese={mese} giorno={giorno} onChange={(a, m, g) => { setAnno(a); setMese(m); setGiorno(g); }} annoCorrente={annoCorrente} styles={styles} />
+        </div>
+        <div>
+          <label style={styles.label}>Turno</label>
+          <select style={styles.select} value={turno} onChange={(e) => setTurno(e.target.value)}>
+            <option value="">Seleziona...</option>
+            <option value="LIBERO">Giorno libero</option>
+            {turniAmmessi.map((code) => (
+              <option key={code} value={code}>{code} — {TIPI_TURNO[code].label}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ flex: 1, minWidth: "180px" }}>
+          <label style={styles.label}>Nota (facoltativa)</label>
+          <input
+            type="text"
+            style={styles.input}
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            placeholder="es. preferirei chiudere quel giorno"
+          />
+        </div>
+        <button style={styles.button} disabled={!turno} onClick={invia}>
+          {isAdmin ? "Assegna" : "Invia richiesta"}
+        </button>
+      </div>
+      <p style={{ fontSize: "11px", color: "#6B7680", marginTop: "10px" }}>
+        {isAdmin
+          ? "Puoi scegliere solo tra i turni ammessi per il ruolo del dipendente selezionato. Viene assegnato subito, senza bisogno di conferma, e si blocca automaticamente (🔒 Do Not Move)."
+          : "Puoi scegliere solo tra i turni ammessi per il tuo ruolo. La richiesta resta in sospeso finché l'admin non la conferma; una volta accettata, il turno si blocca automaticamente (🔒 Do Not Move)."}
+      </p>
+    </div>
+  );
+}
+
+function PulsanteSalva({ onSalva, disabled, styles, testo = "Salva" }) {
+  const [salvato, setSalvato] = useState(false);
+
+  function handleClick() {
+    onSalva();
+    setSalvato(true);
+    setTimeout(() => setSalvato(false), 1800);
+  }
+
+  return (
+    <button
+      style={{
+        ...styles.button,
+        background: salvato ? COLORI.definitivoTesto : styles.button.background,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "7px",
+        transition: "background 0.2s ease",
+      }}
+      disabled={disabled}
+      onClick={handleClick}
+    >
+      {salvato ? (
+        <>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Salvato
+        </>
+      ) : (
+        testo
+      )}
+    </button>
+  );
+}
+
+function CheckboxPersonalizzata({ checked, onChange, label }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: COLORI.ink, userSelect: "none" }}>
+      <span
+        role="checkbox"
+        aria-checked={checked}
+        tabIndex={0}
+        onClick={() => onChange(!checked)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onChange(!checked); } }}
+        style={{
+          width: "20px",
+          height: "20px",
+          borderRadius: "6px",
+          border: checked ? "none" : `1.5px solid ${COLORI.hairlineForte}`,
+          background: checked ? COLORI.teal : COLORI.card,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          cursor: "pointer",
+          transition: "background 0.15s ease, border-color 0.15s ease",
+        }}
+      >
+        {checked && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </span>
+      {label}
+    </label>
+  );
+}
+
+function IconLucchetto({ dimensione = 10, colore = "currentColor", style }) {
+  return (
+    <svg
+      width={dimensione}
+      height={dimensione}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={colore}
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "-1px", flexShrink: 0, ...style }}
+      aria-label="bloccato"
+    >
+      <rect x="4" y="11" width="16" height="10" rx="2.5" />
+      <path d="M7.5 11V7.5a4.5 4.5 0 0 1 9 0V11" />
+    </svg>
+  );
+}
+
+function IconCampanella({ dimensione = 20, colore = "currentColor", style }) {
+  return (
+    <svg
+      width={dimensione}
+      height={dimensione}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={colore}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
+function IconEsci({ dimensione = 19, colore = "currentColor", style }) {
+  return (
+    <svg
+      width={dimensione}
+      height={dimensione}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={colore}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function AvatarDipendente({ d, dimensione = 26 }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: `${dimensione}px`,
+        height: `${dimensione}px`,
+        minWidth: `${dimensione}px`,
+        borderRadius: "50%",
+        background: d.colore,
+        color: testoContrastante(d.colore),
+        fontSize: `${Math.max(9, dimensione * 0.38)}px`,
+        fontWeight: 700,
+        flexShrink: 0,
+      }}
+    >
+      {d.nome?.[0]}{d.cognome?.[0]}
+    </span>
+  );
+}
+
+function SchedaDipendenti({ dipendenti, turni, onSalva, styles }) {
+  const [bozza, setBozza] = useState(dipendenti);
+  const [nuovo, setNuovo] = useState({ cognome: "", nome: "", tipo: "diurno", pin: "", email: "" });
+  const [confermaEliminazione, setConfermaEliminazione] = useState(null); // id in attesa di conferma
+
+  const modificato = JSON.stringify(bozza) !== JSON.stringify(dipendenti);
+
+  function aggiornaCampo(id, campo, valore) {
+    setBozza((prev) => prev.map((x) => (x.id === id ? { ...x, [campo]: valore } : x)));
+  }
+
+  function aggiungiDipendente() {
+    if (!nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.pin.trim()) return;
+    const nuovoId = bozza.length > 0 ? Math.max(...bozza.map((d) => d.id)) + 1 : 1;
+    const colore = COLORI_DIPENDENTE[(nuovoId - 1) % COLORI_DIPENDENTE.length];
+    // FIX #3: rotationSlot stabile assegnato UNA VOLTA alla creazione — il primo intero
+    // libero, non derivato dall'id né dalla posizione nell'array (che può cambiare).
+    const rotationSlot = prossimoRotationSlotLibero(bozza);
+    setBozza((prev) => [
+      ...prev,
+      {
+        id: nuovoId,
+        cognome: nuovo.cognome.trim(),
+        nome: nuovo.nome.trim(),
+        tipo: nuovo.tipo,
+        riposoTipo: "rotante",
+        rotationSlot,
+        active: true,
+        colore,
+        pin: nuovo.pin.trim(),
+        email: nuovo.email.trim(),
+        quotaFerieAnnua: QUOTA_FERIE_DEFAULT,
+        quotaPermessiOreAnnue: QUOTA_PERMESSI_ORE_DEFAULT,
+      },
+    ]);
+    setNuovo({ cognome: "", nome: "", tipo: "diurno", pin: "", email: "" });
+  }
+
+  // FIX #10: l'eliminazione fisica resta disponibile solo per correggere errori (dipendente
+  // aggiunto per sbaglio, zero turni storici) — se esiste anche un solo turno storico
+  // collegato, l'eliminazione viene rifiutata e va usata "Disattiva" al suo posto.
+  function eliminaDipendente(id) {
+    if (confermaEliminazione !== id) {
+      setConfermaEliminazione(id);
+      return;
+    }
+    const esito = eliminaDipendenteDominio(bozza, turni, id);
+    if (!esito.ok) {
+      alert(esito.errore);
+      setConfermaEliminazione(null);
+      return;
+    }
+    setBozza(esito.dipendenti);
+    setConfermaEliminazione(null);
+  }
+
+  function toggleAttivo(id, attivoAttuale) {
+    setBozza((prev) => (attivoAttuale ? disattivaDipendente(prev, id) : attivaDipendente(prev, id)));
+  }
+
+  function salva() {
+    onSalva(bozza);
+  }
+
+  return (
+    <div style={styles.card}>
+      <h3 style={styles.sectionTitle}>Dipendenti</h3>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ ...styles.table, fontSize: "13px", marginTop: "12px" }}>
+          <thead>
+            <tr>
+              <th style={{ ...styles.th, textAlign: "left" }}>Nome</th>
+              <th style={styles.th}>Tipo</th>
+              <th style={styles.th}>Email</th>
+              <th style={styles.th}>Riposo</th>
+              <th style={styles.th}>Coppia fissa</th>
+              <th style={styles.th}>PIN</th>
+              <th style={styles.th}>Stato</th>
+              <th style={styles.th}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {bozza.map((d) => {
+              const attivo = d.active !== false;
+              return (
+              <tr key={d.id} style={{ opacity: attivo ? 1 : 0.5 }}>
+                <td style={{ padding: "9px 10px", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                    <AvatarDipendente d={d} dimensione={28} />
+                    {d.cognome} {d.nome}
+                  </div>
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <select
+                    style={styles.select}
+                    value={d.tipo}
+                    onChange={(e) => aggiornaCampo(d.id, "tipo", e.target.value)}
+                  >
+                    {Object.entries(TIPI_DIPENDENTE).map(([k, v]) => (
+                      <option key={k} value={k}>{v.label}</option>
+                    ))}
+                  </select>
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <input
+                    type="email"
+                    style={{ ...styles.input, width: "170px", textAlign: "center" }}
+                    value={d.email ?? ""}
+                    placeholder="email@esempio.it"
+                    onChange={(e) => aggiornaCampo(d.id, "email", e.target.value)}
+                  />
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <select
+                    style={styles.select}
+                    value={d.riposoTipo ?? "rotante"}
+                    onChange={(e) => aggiornaCampo(d.id, "riposoTipo", e.target.value)}
+                  >
+                    <option value="rotante">Rotante</option>
+                    <option value="fisso">Fisso</option>
+                  </select>
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  {d.riposoTipo === "fisso" ? (
+                    <select
+                      style={styles.select}
+                      value={d.riposoFissoGiorno ?? 5}
+                      onChange={(e) => aggiornaCampo(d.id, "riposoFissoGiorno", Number(e.target.value))}
+                    >
+                      {GIORNI_SETTIMANA.map((nome, indice) => (
+                        <option key={indice} value={indice}>{nome} + {GIORNI_SETTIMANA[(indice + 1) % 7]}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span style={{ color: COLORI.muted, fontSize: "12px" }}>—</span>
+                  )}
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <input
+                    style={{ ...styles.input, width: "70px", textAlign: "center", fontFamily: "ui-monospace, monospace" }}
+                    value={d.pin}
+                    onChange={(e) => aggiornaCampo(d.id, "pin", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  />
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <button
+                    style={{ ...styles.buttonSecondary, padding: "5px 10px", fontSize: "11px" }}
+                    onClick={() => toggleAttivo(d.id, attivo)}
+                  >
+                    {attivo ? "Disattiva" : "Attiva"}
+                  </button>
+                </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                  <button
+                    style={{
+                      ...styles.buttonSecondary,
+                      padding: "5px 10px",
+                      fontSize: "11px",
+                      color: confermaEliminazione === d.id ? COLORI.avvisoTesto : COLORI.muted,
+                    }}
+                    onClick={() => eliminaDipendente(d.id)}
+                    onBlur={() => setConfermaEliminazione(null)}
+                    title="Consentito solo se il dipendente non ha turni storici collegati"
+                  >
+                    {confermaEliminazione === d.id ? "Conferma?" : "Elimina"}
+                  </button>
+                </td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: `1px solid ${COLORI.hairline}` }}>
+        <label style={styles.label}>Aggiungi dipendente</label>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "6px" }}>
+          <input
+            style={{ ...styles.input, width: "150px" }}
+            placeholder="Cognome"
+            value={nuovo.cognome}
+            onChange={(e) => setNuovo({ ...nuovo, cognome: e.target.value })}
+          />
+          <input
+            style={{ ...styles.input, width: "150px" }}
+            placeholder="Nome"
+            value={nuovo.nome}
+            onChange={(e) => setNuovo({ ...nuovo, nome: e.target.value })}
+          />
+          <select
+            style={styles.select}
+            value={nuovo.tipo}
+            onChange={(e) => setNuovo({ ...nuovo, tipo: e.target.value })}
+          >
+            {Object.entries(TIPI_DIPENDENTE).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+          <input
+            type="email"
+            style={{ ...styles.input, width: "170px" }}
+            placeholder="Email"
+            value={nuovo.email}
+            onChange={(e) => setNuovo({ ...nuovo, email: e.target.value })}
+          />
+          <input
+            style={{ ...styles.input, width: "90px", fontFamily: "ui-monospace, monospace" }}
+            placeholder="PIN"
+            value={nuovo.pin}
+            onChange={(e) => setNuovo({ ...nuovo, pin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+          />
+          <button style={styles.button} disabled={!nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.pin.trim()} onClick={aggiungiDipendente}>
+            Aggiungi
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "18px" }}>
+        <PulsanteSalva onSalva={salva} disabled={!modificato} styles={styles} />
+      </div>
+      <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "12px" }}>
+        Bozza: il riposo "Fisso" ora è impostabile per chiunque, non solo Direttore/FOM — è un flag accanto a ciascun dipendente che indica se partecipa alla rotazione o ha una coppia di riposo fissa (scegli solo il giorno di inizio della coppia, es. "Sab + Dom"). "Rotante" (il default) resta la stessa regola di sempre: coppia di 2 giorni consecutivi che scala indietro di 1 ogni mese.
+      </p>
+    </div>
+  );
+}
+
+function PreferenzeGiorniSettimana({ turniAmmessi, preferenzeGiorno, onCambia, styles }) {
+  function toggleTurno(giornoIdx, codice) {
+    const attuali = preferenzeGiorno[giornoIdx] || [];
+    const nuovo = attuali.includes(codice) ? attuali.filter((c) => c !== codice) : [...attuali, codice];
+    onCambia({ ...preferenzeGiorno, [giornoIdx]: nuovo });
+  }
+
+  function sposta(giornoIdx, indice, direzione) {
+    const attuali = [...(preferenzeGiorno[giornoIdx] || [])];
+    const target = indice + direzione;
+    if (target < 0 || target >= attuali.length) return;
+    [attuali[indice], attuali[target]] = [attuali[target], attuali[indice]];
+    onCambia({ ...preferenzeGiorno, [giornoIdx]: attuali });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {GIORNI_SETTIMANA.map((nomeGiorno, giornoIdx) => {
+        const selezionati = preferenzeGiorno[giornoIdx] || [];
+        return (
+          <div key={giornoIdx} style={{ background: COLORI.mist, borderRadius: "10px", padding: "10px 12px" }}>
+            <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.ink, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+              {nomeGiorno}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {turniAmmessi.map((codice) => {
+                const posizione = selezionati.indexOf(codice);
+                const selezionato = posizione !== -1;
+                const colore = TIPI_TURNO[codice].colore;
+                return (
+                  <button
+                    key={codice}
+                    type="button"
+                    onClick={() => toggleTurno(giornoIdx, codice)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      border: "none",
+                      borderRadius: "7px",
+                      padding: "5px 9px",
+                      background: selezionato ? colore : COLORI.card,
+                      color: selezionato ? testoContrastante(colore) : COLORI.muted,
+                      fontSize: "11.5px",
+                      fontWeight: 700,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {selezionato && <span style={{ fontSize: "9.5px", opacity: 0.85 }}>{posizione + 1}°</span>}
+                    {codice}
+                  </button>
+                );
+              })}
+            </div>
+            {selezionati.length > 1 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "8px" }}>
+                {selezionati.map((codice, i) => (
+                  <span key={codice} style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", color: COLORI.muted }}>
+                    {i + 1}. {codice}
+                    <button
+                      type="button"
+                      onClick={() => sposta(giornoIdx, i, -1)}
+                      disabled={i === 0}
+                      style={{ border: "none", background: COLORI.card, borderRadius: "5px", width: "18px", height: "18px", fontSize: "10px", cursor: i === 0 ? "default" : "pointer", opacity: i === 0 ? 0.4 : 1 }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => sposta(giornoIdx, i, 1)}
+                      disabled={i === selezionati.length - 1}
+                      style={{ border: "none", background: COLORI.card, borderRadius: "5px", width: "18px", height: "18px", fontSize: "10px", cursor: i === selezionati.length - 1 ? "default" : "pointer", opacity: i === selezionati.length - 1 ? 0.4 : 1 }}
+                    >
+                      ↓
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SchedaPreferenze({ empCorrente, preferenze, onSalva, styles }) {
+  const turniAmmessi = turniAmmessiDipendente(empCorrente);
+  const [ordineLocale, setOrdineLocale] = useState(preferenze[empCorrente.id]?.ordinePreferenza || turniAmmessi);
+  const [evitaLocale, setEvitaLocale] = useState(!!preferenze[empCorrente.id]?.evitaSequenzeScomode);
+  const [preferenzeGiornoLocale, setPreferenzeGiornoLocale] = useState(preferenze[empCorrente.id]?.preferenzeGiorno || {});
+
+  function salva() {
+    onSalva(empCorrente.id, "ordinePreferenza", ordineLocale);
+    onSalva(empCorrente.id, "evitaSequenzeScomode", evitaLocale);
+    onSalva(empCorrente.id, "preferenzeGiorno", preferenzeGiornoLocale);
+  }
+
+  return (
+    <div style={styles.card}>
+      <h3 style={styles.sectionTitle}>Le mie preferenze</h3>
+      <p style={{ fontSize: "13px", color: COLORI.muted, marginTop: "6px", marginBottom: "18px" }}>
+        Indica le tue preferenze: verranno tenute in considerazione dall'assegnazione automatica, bilanciandole con quelle degli altri colleghi. Ricordati di salvare per renderle effettive.
+      </p>
+      <label style={styles.label}>Ordine di preferenza turni (generale)</label>
+      <p style={{ fontSize: "12px", color: COLORI.muted, margin: "2px 0 10px" }}>
+        Metti in cima il turno che preferisci di più. Usa le frecce per riordinare. Vale come base, a meno che tu non imposti una preferenza più specifica per un giorno della settimana qui sotto.
+      </p>
+      <OrdinePreferenzaTurni
+        turniAmmessi={turniAmmessi}
+        ordine={ordineLocale}
+        onCambia={setOrdineLocale}
+        styles={styles}
+      />
+
+      <label style={{ ...styles.label, marginTop: "22px", display: "block" }}>Preferenze per giorno della settimana</label>
+      <p style={{ fontSize: "12px", color: COLORI.muted, margin: "2px 0 12px" }}>
+        Es. "il lunedì preferisco C2, poi C1". Seleziona uno o più turni per ciascun giorno, poi ordina la priorità con le frecce. Se imposti una preferenza qui, ha la precedenza su quella generale per quel giorno.
+      </p>
+      <PreferenzeGiorniSettimana
+        turniAmmessi={turniAmmessi}
+        preferenzeGiorno={preferenzeGiornoLocale}
+        onCambia={setPreferenzeGiornoLocale}
+        styles={styles}
+      />
+
+      <div style={{ marginTop: "16px" }}>
+        <CheckboxPersonalizzata
+          checked={evitaLocale}
+          onChange={setEvitaLocale}
+          label="Evita sequenze scomode (es. notte seguita da mattina presto)"
+        />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "18px" }}>
+        <PulsanteSalva onSalva={salva} styles={styles} />
+      </div>
+      <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "14px", lineHeight: 1.6 }}>
+        Bozza: la priorità di ciascun dipendente viene poi bilanciata con quella degli altri colleghi dall'assegnazione automatica — non è una garanzia assoluta, ma un criterio di scelta tra i candidati validi.
+      </p>
+    </div>
+  );
+}
+
+function OrdinePreferenzaTurni({ turniAmmessi, ordine, onCambia, styles }) {
+  const lista = ordine && ordine.length > 0 ? ordine.filter((c) => turniAmmessi.includes(c)) : turniAmmessi;
+  const listaCompleta = [...lista, ...turniAmmessi.filter((c) => !lista.includes(c))];
+
+  function sposta(indice, direzione) {
+    const nuova = [...listaCompleta];
+    const target = indice + direzione;
+    if (target < 0 || target >= nuova.length) return;
+    [nuova[indice], nuova[target]] = [nuova[target], nuova[indice]];
+    onCambia(nuova);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px", maxWidth: "340px" }}>
+      {listaCompleta.map((code, i) => (
+        <div
+          key={code}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "8px 12px",
+            borderRadius: "7px",
+            background: "#F1F3F1",
+            border: "1px solid #E1E5E1",
+          }}
+        >
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "#6B7680", width: "14px", fontFamily: "ui-monospace, monospace" }}>{i + 1}</span>
+          <span style={styles.badge(TIPI_TURNO[code].colore)}>{code}</span>
+          <span style={{ fontSize: "12px", color: "#1C2B33", flex: 1 }}>{TIPI_TURNO[code].label}</span>
+          <button
+            style={{ border: "1px solid #CBD1CC", background: "white", borderRadius: "6px", width: "26px", height: "26px", cursor: "pointer", color: "#1C2B33" }}
+            onClick={() => sposta(i, -1)}
+            disabled={i === 0}
+          >
+            ↑
+          </button>
+          <button
+            style={{ border: "1px solid #CBD1CC", background: "white", borderRadius: "6px", width: "26px", height: "26px", cursor: "pointer", color: "#1C2B33" }}
+            onClick={() => sposta(i, 1)}
+            disabled={i === listaCompleta.length - 1}
+          >
+            ↓
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
