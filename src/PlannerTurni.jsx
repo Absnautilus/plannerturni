@@ -170,6 +170,17 @@ function keyTurno(empId, anno, mese, giorno) {
   return `${empId}_${anno}_${mese}_${giorno}`;
 }
 
+// Le API push del browser vogliono la chiave VAPID come Uint8Array, non come stringa:
+// conversione standard da base64url (usata ovunque nelle guide Web Push).
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
 // Genera le celle del calendario per un mese (settimane complete, Lun-Dom), includendo
 // i giorni "di contorno" del mese precedente/successivo per riempire la griglia.
 function generaGrigliaMese(anno, mese) {
@@ -309,9 +320,12 @@ export default function PlannerTurni() {
   const [loginPin, setLoginPin] = useState("");
   const [loginErrore, setLoginErrore] = useState("");
   const [pannelloAccountAperto, setPannelloAccountAperto] = useState(false);
+  const [menuMobileAperto, setMenuMobileAperto] = useState(false);
   const [nuovaEmailAccount, setNuovaEmailAccount] = useState("");
   const [nuovoPinAccount, setNuovoPinAccount] = useState("");
   const [messaggioAccount, setMessaggioAccount] = useState("");
+  const [notifichePushAttive, setNotifichePushAttive] = useState(false);
+  const [notifichePushCaricamento, setNotifichePushCaricamento] = useState(false);
 
   const [tab, setTab] = useState("calendario");
   const [cellaSelezionata, setCellaSelezionata] = useState(null); // { empId, giorno }
@@ -496,6 +510,84 @@ export default function PlannerTurni() {
     }
     setMessaggioAccount("PIN aggiornato.");
     setNuovoPinAccount("");
+  }
+
+  // ---------- Notifiche push ----------
+
+  // Controlla se QUESTO browser/dispositivo ha già una sottoscrizione push attiva
+  // (indipendente per ogni dispositivo: attivarle sul telefono non le attiva anche
+  // sul computer, va fatto separatamente su ciascuno).
+  useEffect(() => {
+    if (!utenteLoggato || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    navigator.serviceWorker.getRegistration().then((registrazione) => {
+      registrazione?.pushManager.getSubscription().then((sub) => setNotifichePushAttive(!!sub));
+    });
+  }, [utenteLoggato]);
+
+  async function attivaNotifichePush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setMessaggioAccount("Questo browser non supporta le notifiche push.");
+      return;
+    }
+    if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) {
+      setMessaggioAccount("Notifiche push non ancora configurate: contatta l'amministratore.");
+      return;
+    }
+    setNotifichePushCaricamento(true);
+    try {
+      const permesso = await Notification.requestPermission();
+      if (permesso !== "granted") {
+        setMessaggioAccount("Permesso per le notifiche negato dal browser.");
+        return;
+      }
+      const registrazione = await navigator.serviceWorker.register("/sw.js");
+      const subscription = await registrazione.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+      });
+      const sub = subscription.toJSON();
+      const { error } = await supabase.from("push_subscriptions").upsert(
+        { profile_id: utenteLoggato.id, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+        { onConflict: "endpoint" }
+      );
+      if (error) throw error;
+      setNotifichePushAttive(true);
+      setMessaggioAccount("Notifiche push attivate su questo dispositivo.");
+    } catch (err) {
+      setMessaggioAccount(`Errore: ${err.message}`);
+    } finally {
+      setNotifichePushCaricamento(false);
+    }
+  }
+
+  async function disattivaNotifichePush() {
+    setNotifichePushCaricamento(true);
+    try {
+      const registrazione = await navigator.serviceWorker.getRegistration();
+      const subscription = await registrazione?.pushManager.getSubscription();
+      if (subscription) {
+        await supabase.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+        await subscription.unsubscribe();
+      }
+      setNotifichePushAttive(false);
+      setMessaggioAccount("Notifiche push disattivate su questo dispositivo.");
+    } catch (err) {
+      setMessaggioAccount(`Errore: ${err.message}`);
+    } finally {
+      setNotifichePushCaricamento(false);
+    }
+  }
+
+  // Le notifiche push sono un extra rispetto all'azione principale (accettare uno
+  // scambio, approvare ferie...): se l'invio fallisce non deve mai bloccarla, quindi
+  // gli errori restano silenziosi qui (la notifica in-app nella campanella resta comunque).
+  async function inviaPush(profileId, titolo, corpo) {
+    if (!supabase || !profileId) return;
+    try {
+      await supabase.functions.invoke("send-push", { body: { profileId, titolo, corpo } });
+    } catch {
+      // silenzioso, vedi commento sopra
+    }
   }
 
   // ---------- Gestione turni ----------
@@ -799,6 +891,8 @@ export default function PlannerTurni() {
         stato: STATI_SWAP.IN_ATTESA_COLLEGA,
       },
     ]);
+    const richiedente = dipendenti.find((d) => d.id === empId);
+    inviaPush(empDestinatarioId, "Nuovo cambio turno", `${richiedente?.nome ?? "Un collega"} ti ha proposto un cambio turno.`);
   }
 
   // FIX #8: rivalidazione al momento dell'applicazione effettiva (non solo alla creazione della
@@ -822,13 +916,22 @@ export default function PlannerTurni() {
   function rispondiSwapCollega(id, accetta) {
     const richiesta = richiesteSwap.find((r) => r.id === id);
     if (!richiesta) return;
+    const collega = dipendenti.find((d) => d.id === richiesta.aEmpId);
     if (!accetta) {
       setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: rifiutaDaCollega() } : r)));
+      inviaPush(richiesta.daEmpId, "Cambio turno rifiutato", `${collega?.nome ?? "Il collega"} ha rifiutato il cambio turno.`);
       return;
     }
     const nuovoStato = accettaDaCollega(statoMese);
     setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato } : r)));
-    if (nuovoStato === STATI_SWAP.APPLICATA) applicaSwapEffettivo(richiesta);
+    if (nuovoStato === STATI_SWAP.APPLICATA) {
+      applicaSwapEffettivo(richiesta);
+      inviaPush(richiesta.daEmpId, "Cambio turno accettato", `${collega?.nome ?? "Il collega"} ha accettato il cambio turno.`);
+    } else if (nuovoStato === STATI_SWAP.IN_ATTESA_ADMIN) {
+      dipendenti.filter((d) => d.isAdmin).forEach((admin) =>
+        inviaPush(admin.id, "Cambio turno da approvare", "Un cambio turno tra colleghi è in attesa della tua approvazione.")
+      );
+    }
   }
 
   // L'admin risponde, solo quando la richiesta è in attesa sua (mese Definitivo).
@@ -837,7 +940,12 @@ export default function PlannerTurni() {
     if (!richiesta) return;
     const nuovoStato = approva ? approvaSwapAdmin() : rifiutaSwapAdmin();
     setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato } : r)));
-    if (nuovoStato === STATI_SWAP.APPLICATA) applicaSwapEffettivo(richiesta);
+    if (nuovoStato === STATI_SWAP.APPLICATA) {
+      applicaSwapEffettivo(richiesta);
+      inviaPush(richiesta.daEmpId, "Cambio turno accettato", "L'admin ha approvato il tuo cambio turno.");
+    } else {
+      inviaPush(richiesta.daEmpId, "Cambio turno rifiutato", "L'admin ha rifiutato il tuo cambio turno.");
+    }
   }
 
   // ---------- Richieste ferie/permessi ----------
@@ -860,14 +968,19 @@ export default function PlannerTurni() {
         stato: "in sospeso",
       },
     ]);
+    const richiedente = dipendenti.find((d) => d.id === empId);
+    const tipoLabel = tipo === "F" ? "ferie" : "un permesso";
+    dipendenti.filter((d) => d.isAdmin).forEach((admin) =>
+      inviaPush(admin.id, "Nuova richiesta", `${richiedente?.nome ?? "Un dipendente"} ha richiesto ${tipoLabel}.`)
+    );
   }
 
   function gestisciAssenza(id, decisione) {
     setRichiesteAssenza((prev) =>
       prev.map((r) => (r.id === id ? { ...r, stato: decisione } : r))
     );
+    const r = richiesteAssenza.find((r) => r.id === id);
     if (decisione === "approvata") {
-      const r = richiesteAssenza.find((r) => r.id === id);
       if (r) {
         const k = keyTurno(r.empId, r.anno, r.mese, r.giorno);
         setTurni((prev) => {
@@ -879,6 +992,10 @@ export default function PlannerTurni() {
           return { ...prev, [k]: { code: r.tipo, dnm: false } };
         });
       }
+    }
+    if (r) {
+      const tipoLabel = r.tipo === "F" ? "Ferie" : "Permesso";
+      inviaPush(r.empId, decisione === "approvata" ? `${tipoLabel} approvate` : `${tipoLabel} rifiutate`, `La tua richiesta è stata ${decisione === "approvata" ? "approvata" : "rifiutata"}.`);
     }
   }
 
@@ -910,6 +1027,11 @@ export default function PlannerTurni() {
     ]);
     if (isAdmin) {
       applicaPreassegnazioneTurno(empId, giorno, annoRichiesta, meseRichiesta, turno);
+    } else {
+      const richiedente = dipendenti.find((d) => d.id === empId);
+      dipendenti.filter((d) => d.isAdmin).forEach((admin) =>
+        inviaPush(admin.id, "Nuova pre-assegnazione richiesta", `${richiedente?.nome ?? "Un dipendente"} ha richiesto una pre-assegnazione.`)
+      );
     }
   }
 
@@ -917,9 +1039,12 @@ export default function PlannerTurni() {
     setRichiestePreassegnazione((prev) =>
       prev.map((r) => (r.id === id ? { ...r, stato: decisione } : r))
     );
+    const r = richiestePreassegnazione.find((r) => r.id === id);
     if (decisione === "approvata") {
-      const r = richiestePreassegnazione.find((r) => r.id === id);
       if (r) applicaPreassegnazioneTurno(r.empId, r.giorno, r.anno, r.mese, r.turno);
+    }
+    if (r) {
+      inviaPush(r.empId, decisione === "approvata" ? "Pre-assegnazione approvata" : "Pre-assegnazione rifiutata", `La tua richiesta è stata ${decisione === "approvata" ? "approvata" : "rifiutata"}.`);
     }
   }
 
@@ -1055,6 +1180,50 @@ export default function PlannerTurni() {
       letterSpacing: "0.01em",
       whiteSpace: "nowrap",
       flexShrink: 0,
+    }),
+    hamburgerBtn: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      width: "100%",
+      border: "none",
+      background: COLORI.inkDark,
+      color: "#FFFFFF",
+      padding: "12px 16px",
+      borderRadius: "12px",
+      cursor: "pointer",
+      fontSize: "13.5px",
+      fontWeight: 700,
+      fontFamily: "inherit",
+      boxSizing: "border-box",
+    },
+    menuMobilePannello: {
+      position: "fixed",
+      top: "112px",
+      left: "12px",
+      right: "12px",
+      background: COLORI.card,
+      borderRadius: "14px",
+      boxShadow: "0 12px 32px rgba(28,30,46,0.18)",
+      zIndex: 50,
+      padding: "8px",
+      maxHeight: "70vh",
+      overflowY: "auto",
+    },
+    menuMobileVoce: (active) => ({
+      display: "block",
+      width: "100%",
+      textAlign: "left",
+      border: "none",
+      background: active ? COLORI.mist : "transparent",
+      color: COLORI.ink,
+      padding: "12px 14px",
+      borderRadius: "10px",
+      cursor: "pointer",
+      fontSize: "14px",
+      fontWeight: active ? 700 : 500,
+      fontFamily: "inherit",
+      marginBottom: "2px",
     }),
     container: { padding: isMobile ? "0 14px 28px" : "0 28px 40px", maxWidth: "1180px", margin: "0 auto" },
     card: {
@@ -1403,18 +1572,24 @@ export default function PlannerTurni() {
       lineHeight: 1,
       boxShadow: "0 0 0 2px #fff",
     },
+    // Su mobile è ancorato alla viewport (non al bottone che lo apre): un bottone
+    // qualunque nell'header può trovarsi vicino al bordo, e un pannello ancorato lì
+    // rischierebbe di uscire dallo schermo. Fissarlo a destra della viewport lo tiene
+    // sempre visibile, indipendentemente da dove si trovi il bottone che lo apre.
     pannelloNotifiche: (isMobile) => ({
-      position: "absolute",
-      top: "calc(100% + 8px)",
-      right: isMobile ? "-70px" : 0,
-      width: isMobile ? "260px" : "320px",
-      maxHeight: "360px",
+      position: isMobile ? "fixed" : "absolute",
+      top: isMobile ? "64px" : "calc(100% + 8px)",
+      right: isMobile ? "12px" : 0,
+      left: isMobile ? "12px" : "auto",
+      width: isMobile ? "auto" : "320px",
+      maxHeight: isMobile ? "70vh" : "360px",
       overflowY: "auto",
       background: COLORI.card,
       borderRadius: "14px",
       boxShadow: "0 12px 32px rgba(28,30,46,0.18)",
       zIndex: 50,
       padding: "8px",
+      boxSizing: "border-box",
     }),
     rigaNotifica: {
       display: "flex",
@@ -1554,6 +1729,16 @@ export default function PlannerTurni() {
     });
   }
 
+  const vociNav = [
+    { id: "calendario", label: "Calendario" },
+    { id: "mieiturni", label: "I miei turni" },
+    ...(isAdmin ? [{ id: "dipendenti", label: "Dipendenti" }, { id: "copertura", label: "Regole copertura" }] : []),
+    { id: "preferenze", label: "Le mie preferenze" },
+    { id: "swap", label: "Cambi turno" },
+    { id: "assenze", label: "Ferie / Permessi" },
+    { id: "preassegnazioni", label: "Pre-assegnazioni" },
+  ];
+
   return (
     <div className="planner-turni-app" style={styles.page}>
       <style>{GLOBAL_STYLE}</style>
@@ -1670,6 +1855,20 @@ export default function PlannerTurni() {
                       <button type="button" style={styles.buttonSecondary} onClick={aggiornaPinAccount}>Salva</button>
                     </div>
                   </div>
+                  <div style={{ padding: "0 8px", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+                    <div>
+                      <label style={styles.label}>Notifiche push</label>
+                      <p style={{ fontSize: "11px", color: COLORI.muted, margin: 0 }}>Solo su questo dispositivo</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={notifichePushCaricamento}
+                      style={styles.toggleTraccia(notifichePushAttive)}
+                      onClick={() => (notifichePushAttive ? disattivaNotifichePush() : attivaNotifichePush())}
+                    >
+                      <span style={styles.toggleCerchio(notifichePushAttive)} />
+                    </button>
+                  </div>
                   {messaggioAccount && (
                     <p style={{ fontSize: "12px", color: messaggioAccount.startsWith("Errore") ? COLORI.avvisoTesto : COLORI.tealScuro, padding: "0 8px" }}>
                       {messaggioAccount}
@@ -1687,16 +1886,37 @@ export default function PlannerTurni() {
       </div>
 
       <div style={styles.navWrapper}>
-        <div className="ptn-nav-scroll" style={styles.nav}>
-          <button style={styles.navBtn(tab === "calendario")} onClick={() => setTab("calendario")}>Calendario</button>
-          <button style={styles.navBtn(tab === "mieiturni")} onClick={() => setTab("mieiturni")}>I miei turni</button>
-          {isAdmin && <button style={styles.navBtn(tab === "dipendenti")} onClick={() => setTab("dipendenti")}>Dipendenti</button>}
-          {isAdmin && <button style={styles.navBtn(tab === "copertura")} onClick={() => setTab("copertura")}>Regole copertura</button>}
-          <button style={styles.navBtn(tab === "preferenze")} onClick={() => setTab("preferenze")}>Le mie preferenze</button>
-          <button style={styles.navBtn(tab === "swap")} onClick={() => setTab("swap")}>Cambi turno</button>
-          <button style={styles.navBtn(tab === "assenze")} onClick={() => setTab("assenze")}>Ferie / Permessi</button>
-          <button style={styles.navBtn(tab === "preassegnazioni")} onClick={() => setTab("preassegnazioni")}>Pre-assegnazioni</button>
-        </div>
+        {isMobile ? (
+          <div style={{ position: "relative" }}>
+            <button type="button" style={styles.hamburgerBtn} onClick={() => setMenuMobileAperto((v) => !v)}>
+              <IconHamburger dimensione={18} colore="#FFFFFF" />
+              {vociNav.find((v) => v.id === tab)?.label ?? "Menu"}
+            </button>
+            {menuMobileAperto && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setMenuMobileAperto(false)} />
+                <div style={styles.menuMobilePannello}>
+                  {vociNav.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      style={styles.menuMobileVoce(tab === v.id)}
+                      onClick={() => { setTab(v.id); setMenuMobileAperto(false); }}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="ptn-nav-scroll" style={styles.nav}>
+            {vociNav.map((v) => (
+              <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => setTab(v.id)}>{v.label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={styles.container}>
@@ -2940,6 +3160,27 @@ function IconIngranaggio({ dimensione = 19, colore = "currentColor", style }) {
     >
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function IconHamburger({ dimensione = 20, colore = "currentColor", style }) {
+  return (
+    <svg
+      width={dimensione}
+      height={dimensione}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={colore}
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
     </svg>
   );
 }
