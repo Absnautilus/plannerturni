@@ -78,3 +78,4 @@ src/
 10. Eliminazione dipendente consentita solo senza turni storici; altrimenti Disattiva
 
 Nessuna modifica a Supabase, login, o funzionalità non richieste in questa fase.
+
