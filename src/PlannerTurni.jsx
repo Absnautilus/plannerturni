@@ -26,7 +26,7 @@ import {
 import { puoEliminareDefinitivamente, disattivaDipendente, attivaDipendente } from "./domain/employeeLifecycle.js";
 import { generaICS } from "./domain/icsExport.js";
 import { profiloDaRiga, rigaDaProfiloParziale } from "./domain/profiliMapper.js";
-import { supabase } from "./lib/supabaseClient.js";
+import { supabase, RESTA_CONNESSO_KEY } from "./lib/supabaseClient.js";
 import logoPlannerTurni from "./assets/logo-planner-turni.png";
 import logoIcona from "./assets/logo-icon.png";
 
@@ -319,6 +319,17 @@ export default function PlannerTurni() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPin, setLoginPin] = useState("");
   const [loginErrore, setLoginErrore] = useState("");
+  const [restaConnesso, setRestaConnesso] = useState(true);
+  const [modalitaRecupero, setModalitaRecupero] = useState(false); // mostra il form "PIN dimenticato"
+  const [emailRecupero, setEmailRecupero] = useState("");
+  const [messaggioRecupero, setMessaggioRecupero] = useState("");
+  const [recuperoInCorso, setRecuperoInCorso] = useState(false);
+  // true quando l'utente è arrivato qui dal link "reimposta PIN" ricevuto via email:
+  // in quel caso, invece della app normale, mostriamo solo il modulo per scegliere
+  // il nuovo PIN (vedi l'evento PASSWORD_RECOVERY nell'effetto di autenticazione).
+  const [impostaNuovoPinDopoRecupero, setImpostaNuovoPinDopoRecupero] = useState(false);
+  const [nuovoPinRecupero, setNuovoPinRecupero] = useState("");
+  const [messaggioNuovoPinRecupero, setMessaggioNuovoPinRecupero] = useState("");
   const [pannelloAccountAperto, setPannelloAccountAperto] = useState(false);
   const [nuovaEmailAccount, setNuovaEmailAccount] = useState("");
   const [nuovoPinAccount, setNuovoPinAccount] = useState("");
@@ -426,7 +437,12 @@ export default function PlannerTurni() {
       setSessionePronta(true);
       return;
     }
-    const { data: sottoscrizione } = supabase.auth.onAuthStateChange(async (_evento, sessione) => {
+    const { data: sottoscrizione } = supabase.auth.onAuthStateChange(async (evento, sessione) => {
+      // Arrivati qui dal link "Password dimenticata" ricevuto via email: prima di
+      // lasciare entrare nella app, blocchiamo su una schermata che chiede il nuovo PIN.
+      if (evento === "PASSWORD_RECOVERY") {
+        setImpostaNuovoPinDopoRecupero(true);
+      }
       if (sessione?.user) {
         const profili = await ricaricaDipendenti();
         const mio = profili.find((p) => p.id === sessione.user.id);
@@ -460,6 +476,10 @@ export default function PlannerTurni() {
       return;
     }
     setLoginErrore("");
+    // Va scritta PRIMA del login: l'adapter di storage in supabaseClient.js la legge
+    // nel momento stesso in cui Supabase salva la sessione, per decidere se metterla
+    // in localStorage (sopravvive alla chiusura del browser) o in sessionStorage.
+    localStorage.setItem(RESTA_CONNESSO_KEY, restaConnesso ? "true" : "false");
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail.trim(), password: loginPin });
     if (error) {
       setLoginErrore(`Errore: ${error.message}`);
@@ -474,6 +494,37 @@ export default function PlannerTurni() {
     setLoginEmail("");
     setLoginPin("");
     setPannelloAccountAperto(false);
+  }
+
+  // ---------- Recupero PIN dimenticato ----------
+
+  async function inviaRecuperoPin() {
+    if (!emailRecupero.trim()) return;
+    setRecuperoInCorso(true);
+    setMessaggioRecupero("");
+    const { error } = await supabase.auth.resetPasswordForEmail(emailRecupero.trim(), {
+      redirectTo: window.location.origin,
+    });
+    setRecuperoInCorso(false);
+    if (error) {
+      setMessaggioRecupero(`Errore: ${error.message}`);
+      return;
+    }
+    setMessaggioRecupero("Se l'indirizzo è registrato, ti abbiamo inviato un'email con il link per scegliere un nuovo PIN.");
+  }
+
+  async function confermaNuovoPinRecupero() {
+    if (nuovoPinRecupero.length < 4) {
+      setMessaggioNuovoPinRecupero("Il PIN deve avere almeno 4 caratteri.");
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: nuovoPinRecupero });
+    if (error) {
+      setMessaggioNuovoPinRecupero(`Errore: ${error.message}`);
+      return;
+    }
+    setNuovoPinRecupero("");
+    setImpostaNuovoPinDopoRecupero(false);
   }
 
   const isAdmin = utenteLoggato?.isAdmin;
@@ -1612,43 +1663,132 @@ export default function PlannerTurni() {
     );
   }
 
-  if (!utenteLoggato) {
+  if (impostaNuovoPinDopoRecupero) {
     return (
       <div className="planner-turni-app" style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", boxSizing: "border-box" }}>
         <style>{GLOBAL_STYLE}</style>
         <div style={{ ...styles.card, width: "100%", maxWidth: "340px", boxSizing: "border-box", textAlign: "center" }}>
           <img src={logoPlannerTurni} alt="Planner Turni" style={{ width: "100%", maxWidth: "280px", height: "auto", margin: "0 auto 18px" }} />
           <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: 0, marginBottom: "20px" }}>
-            Accedi con l'email e il PIN che ti ha fornito l'amministratore.
+            Scegli il tuo nuovo PIN.
           </p>
-          <div style={{ marginBottom: "12px", textAlign: "left" }}>
-            <label style={styles.label}>Email</label>
-            <input
-              style={styles.input}
-              type="email"
-              autoComplete="username"
-              value={loginEmail}
-              onChange={(e) => setLoginEmail(e.target.value)}
-              placeholder="nome@esempio.it"
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            />
-          </div>
           <div style={{ marginBottom: "16px", textAlign: "left" }}>
-            <label style={styles.label}>PIN</label>
+            <label style={styles.label}>Nuovo PIN</label>
             <input
               style={styles.input}
               type="password"
-              autoComplete="current-password"
-              value={loginPin}
-              onChange={(e) => setLoginPin(e.target.value)}
-              placeholder="il tuo PIN"
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              autoComplete="new-password"
+              value={nuovoPinRecupero}
+              onChange={(e) => setNuovoPinRecupero(e.target.value)}
+              placeholder="il tuo nuovo PIN"
+              onKeyDown={(e) => e.key === "Enter" && confermaNuovoPinRecupero()}
             />
           </div>
-          {loginErrore && <p style={{ color: COLORI.avvisoTesto, fontSize: "12px" }}>{loginErrore}</p>}
-          <button style={{ ...styles.button, width: "100%" }} onClick={handleLogin}>
-            Entra
+          {messaggioNuovoPinRecupero && (
+            <p style={{ color: messaggioNuovoPinRecupero.startsWith("Errore") ? COLORI.avvisoTesto : COLORI.tealScuro, fontSize: "12px" }}>
+              {messaggioNuovoPinRecupero}
+            </p>
+          )}
+          <button style={{ ...styles.button, width: "100%" }} onClick={confermaNuovoPinRecupero}>
+            Salva nuovo PIN
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!utenteLoggato) {
+    return (
+      <div className="planner-turni-app" style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", boxSizing: "border-box" }}>
+        <style>{GLOBAL_STYLE}</style>
+        <div style={{ ...styles.card, width: "100%", maxWidth: "340px", boxSizing: "border-box", textAlign: "center" }}>
+          <img src={logoPlannerTurni} alt="Planner Turni" style={{ width: "100%", maxWidth: "280px", height: "auto", margin: "0 auto 18px" }} />
+          {modalitaRecupero ? (
+            <>
+              <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: 0, marginBottom: "20px" }}>
+                Inserisci la tua email: ti mandiamo un link per scegliere un nuovo PIN.
+              </p>
+              <div style={{ marginBottom: "16px", textAlign: "left" }}>
+                <label style={styles.label}>Email</label>
+                <input
+                  style={styles.input}
+                  type="email"
+                  autoComplete="username"
+                  value={emailRecupero}
+                  onChange={(e) => setEmailRecupero(e.target.value)}
+                  placeholder="nome@esempio.it"
+                  onKeyDown={(e) => e.key === "Enter" && inviaRecuperoPin()}
+                />
+              </div>
+              {messaggioRecupero && (
+                <p style={{ color: messaggioRecupero.startsWith("Errore") ? COLORI.avvisoTesto : COLORI.tealScuro, fontSize: "12px" }}>
+                  {messaggioRecupero}
+                </p>
+              )}
+              <button style={{ ...styles.button, width: "100%" }} disabled={recuperoInCorso} onClick={inviaRecuperoPin}>
+                {recuperoInCorso ? "Invio…" : "Invia link di recupero"}
+              </button>
+              <button
+                type="button"
+                style={{ ...styles.buttonSecondary, width: "100%", marginTop: "10px", background: "transparent" }}
+                onClick={() => { setModalitaRecupero(false); setMessaggioRecupero(""); }}
+              >
+                Torna al login
+              </button>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: "12px", color: COLORI.muted, marginTop: 0, marginBottom: "20px" }}>
+                Accedi con l'email e il PIN che ti ha fornito l'amministratore.
+              </p>
+              <div style={{ marginBottom: "12px", textAlign: "left" }}>
+                <label style={styles.label}>Email</label>
+                <input
+                  style={styles.input}
+                  type="email"
+                  autoComplete="username"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="nome@esempio.it"
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                />
+              </div>
+              <div style={{ marginBottom: "12px", textAlign: "left" }}>
+                <label style={styles.label}>PIN</label>
+                <input
+                  style={styles.input}
+                  type="password"
+                  autoComplete="current-password"
+                  value={loginPin}
+                  onChange={(e) => setLoginPin(e.target.value)}
+                  placeholder="il tuo PIN"
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: COLORI.ink, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={restaConnesso}
+                    onChange={(e) => setRestaConnesso(e.target.checked)}
+                    style={{ accentColor: COLORI.teal, width: "15px", height: "15px", cursor: "pointer" }}
+                  />
+                  Resta connesso
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setModalitaRecupero(true); setEmailRecupero(loginEmail); }}
+                  style={{ border: "none", background: "transparent", color: COLORI.tealScuro, fontSize: "12px", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                >
+                  PIN dimenticato?
+                </button>
+              </div>
+              {loginErrore && <p style={{ color: COLORI.avvisoTesto, fontSize: "12px" }}>{loginErrore}</p>}
+              <button style={{ ...styles.button, width: "100%" }} onClick={handleLogin}>
+                Entra
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
