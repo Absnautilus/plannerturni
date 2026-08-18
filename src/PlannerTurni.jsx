@@ -34,7 +34,7 @@ import {
   preassegnazioneDaRiga,
   rigaDaPreassegnazione,
 } from "./domain/richiesteMapper.js";
-import { supabase, RESTA_CONNESSO_KEY } from "./lib/supabaseClient.js";
+import { supabase, RESTA_CONNESSO_KEY, ULTIMA_ATTIVITA_KEY } from "./lib/supabaseClient.js";
 import logoPlannerTurni from "./assets/logo-planner-turni.png";
 import logoIcona from "./assets/logo-icon.png";
 
@@ -534,6 +534,21 @@ export default function PlannerTurni() {
         setImpostaNuovoPinDopoRecupero(true);
       }
       if (sessione?.user) {
+        // "Resta connesso" tiene la sessione viva (Supabase da solo non la farebbe scadere
+        // da sola), ma solo finché l'app viene davvero riaperta: se sono passate più di 24
+        // ore dall'ultimo uso reale, la sessione va comunque chiusa qui, prima di caricare
+        // qualunque dato. Non riguarda chi non ha spuntato "Resta connesso": in quel caso la
+        // sessione vive in sessionStorage e sparisce da sola chiudendo scheda/browser.
+        const restaConnessoAttivo = localStorage.getItem(RESTA_CONNESSO_KEY) !== "false";
+        const ultimaAttivita = Number(localStorage.getItem(ULTIMA_ATTIVITA_KEY) || 0);
+        const inattivoOltre24Ore = restaConnessoAttivo && ultimaAttivita > 0 && Date.now() - ultimaAttivita > 24 * 60 * 60 * 1000;
+        if (inattivoOltre24Ore) {
+          localStorage.removeItem(ULTIMA_ATTIVITA_KEY);
+          await supabase.auth.signOut();
+          setSessionePronta(true);
+          return;
+        }
+        localStorage.setItem(ULTIMA_ATTIVITA_KEY, String(Date.now()));
         const profili = await ricaricaDipendenti();
         await caricaTurniEStato();
         await ricaricaRichieste();
@@ -580,6 +595,13 @@ export default function PlannerTurni() {
       if (inCorso) return;
       inCorso = true;
       try {
+        // Ogni aggiornamento in background parte solo perché l'app è davvero aperta e in uso
+        // (tick periodico, o ritorno di focus/visibilità): è il segnale di attività che tiene
+        // viva la finestra di 24 ore di "Resta connesso" (vedi il controllo nell'effetto di
+        // autenticazione più sopra).
+        if (localStorage.getItem(RESTA_CONNESSO_KEY) !== "false") {
+          localStorage.setItem(ULTIMA_ATTIVITA_KEY, String(Date.now()));
+        }
         if (tabRef.current !== "dipendenti") await ricaricaDipendenti();
         if (JSON.stringify(turniRef.current) === JSON.stringify(turniSincronizzatiRef.current)) {
           await caricaTurniEStato();
