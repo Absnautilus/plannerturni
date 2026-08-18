@@ -19,12 +19,16 @@ export function profiloDaRiga(riga) {
     isAdmin: riga.is_admin,
     membroSquadra: riga.membro_squadra,
     ordine: riga.ordine,
+    email: riga.email,
+    credenzialiDaImpostare: riga.credenziali_da_impostare,
   };
 }
 
 // Solo i campi passati vengono convertiti: usata per costruire il payload di un
 // update parziale (es. dopo una modifica in "Dipendenti") senza dover rispecificare
-// l'intera riga.
+// l'intera riga. `email`/`credenzialiDaImpostare` restano fuori di proposito: si scrivono
+// solo tramite le Edge Function create-employee / update-employee-credentials, che
+// aggiornano insieme l'account auth reale — mai con un update diretto sulla tabella.
 export function rigaDaProfiloParziale(patch) {
   const mappa = {
     cognome: "cognome",

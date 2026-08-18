@@ -19,6 +19,8 @@ describe("profiloDaRiga", () => {
       is_admin: false,
       membro_squadra: true,
       ordine: 3,
+      email: "mario.rossi@esempio.it",
+      credenziali_da_impostare: false,
     };
     expect(profiloDaRiga(riga)).toEqual({
       id: "abc-123",
@@ -36,6 +38,8 @@ describe("profiloDaRiga", () => {
       isAdmin: false,
       membroSquadra: true,
       ordine: 3,
+      email: "mario.rossi@esempio.it",
+      credenzialiDaImpostare: false,
     });
   });
 
@@ -54,5 +58,9 @@ describe("rigaDaProfiloParziale", () => {
 
   it("ignora chiavi non mappate", () => {
     expect(rigaDaProfiloParziale({ pin: "1234" })).toEqual({});
+  });
+
+  it("ignora email e credenzialiDaImpostare: si scrivono solo tramite le Edge Function", () => {
+    expect(rigaDaProfiloParziale({ email: "x@y.it", credenzialiDaImpostare: true })).toEqual({});
   });
 });

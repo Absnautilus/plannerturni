@@ -12,6 +12,31 @@ export const TIPI_TURNO = {
   R: { label: "Riposo", orario: "", colore: "#9AA0A6" },
   F: { label: "Ferie", orario: "", colore: "#C9A227" },
   P: { label: "Permesso", orario: "", colore: "#6B5B95" },
+  // Non sono turni di copertura: sono etichette per segnare la giornata lavorativa
+  // (permessi a ore, R.O.L., flessibilità, malattia, assenze...). Stesso grigio e
+  // stessa formattazione di "Riposo" — nessun orario, non vanno coperti né conteggiati
+  // nell'assegnazione automatica.
+  P8: { label: "Permesso 8H", orario: "", colore: "#9AA0A6" },
+  P7: { label: "Permesso 7H", orario: "", colore: "#9AA0A6" },
+  P6: { label: "Permesso 6H", orario: "", colore: "#9AA0A6" },
+  P5: { label: "Permesso 5H", orario: "", colore: "#9AA0A6" },
+  P4: { label: "Permesso 4H", orario: "", colore: "#9AA0A6" },
+  P3: { label: "Permesso 3H", orario: "", colore: "#9AA0A6" },
+  P2: { label: "Permesso 2H", orario: "", colore: "#9AA0A6" },
+  P1: { label: "Permesso 1H", orario: "", colore: "#9AA0A6" },
+  R8: { label: "R.O.L. 8H", orario: "", colore: "#9AA0A6" },
+  R7: { label: "R.O.L. 7H", orario: "", colore: "#9AA0A6" },
+  R6: { label: "R.O.L. 6H", orario: "", colore: "#9AA0A6" },
+  R5: { label: "R.O.L. 5H", orario: "", colore: "#9AA0A6" },
+  R4: { label: "R.O.L. 4H", orario: "", colore: "#9AA0A6" },
+  R3: { label: "R.O.L. 3H", orario: "", colore: "#9AA0A6" },
+  R2: { label: "R.O.L. 2H", orario: "", colore: "#9AA0A6" },
+  R1: { label: "R.O.L. 1H", orario: "", colore: "#9AA0A6" },
+  RS: { label: "Flessibilità lavorata", orario: "", colore: "#9AA0A6" },
+  RR: { label: "Flessibilità goduta", orario: "", colore: "#9AA0A6" },
+  AS: { label: "Assenza ingiustificata", orario: "", colore: "#9AA0A6" },
+  M: { label: "Malattia", orario: "", colore: "#9AA0A6" },
+  FG: { label: "Festività goduta", orario: "", colore: "#9AA0A6" },
 };
 
 export const CODICI_MATTINA = ["A1", "A2"];

@@ -44,13 +44,22 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { email, pin, cognome, nome, tipo, colore, rotationSlot, riposoTipo, isAdmin } = body;
-    if (!email || !pin || !cognome || !nome || !tipo) {
-      throw new Error("Email, PIN, cognome, nome e tipo sono obbligatori.");
+    if (!cognome || !nome || !tipo) {
+      throw new Error("Cognome, nome e tipo sono obbligatori.");
     }
+    // Email e PIN sono opzionali in creazione (l'admin può aggiungere il resto della
+    // squadra prima di conoscerne l'email personale). Ma `profiles.id` è una foreign key
+    // su auth.users.id: un account di autenticazione deve esistere comunque, quindi qui
+    // generiamo un'email segnaposto (mai mostrata) e un PIN casuale — nessuno può accedere
+    // con queste credenziali finché l'admin non le sostituisce con quelle vere tramite
+    // "Imposta email/PIN" (Edge Function update-employee-credentials).
+    const credenzialiDaImpostare = !email?.trim() || !pin?.trim();
+    const emailEffettiva = email?.trim() || `${crypto.randomUUID()}@segnaposto.planner-turni.local`;
+    const pinEffettivo = pin?.trim() || crypto.randomUUID();
 
     const { data: nuovoUtente, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: pin,
+      email: emailEffettiva,
+      password: pinEffettivo,
       email_confirm: true,
     });
     if (createError) throw createError;
@@ -64,6 +73,8 @@ Deno.serve(async (req) => {
       rotation_slot: rotationSlot ?? null,
       riposo_tipo: riposoTipo ?? "rotante",
       is_admin: !!isAdmin,
+      email: credenzialiDaImpostare ? null : emailEffettiva,
+      credenziali_da_impostare: credenzialiDaImpostare,
     });
     if (insertError) {
       // Il profilo non si è creato: non lasciare un account di login orfano senza profilo.

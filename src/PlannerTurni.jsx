@@ -294,16 +294,29 @@ export default function PlannerTurni() {
   // dispositivi), non più in localStorage: caricati dopo il login, vedi l'effetto di
   // autenticazione più sotto.
   const [dipendenti, setDipendenti] = useState([]);
-  const [statoPerMese, setStatoPerMese] = useState(statoSalvato.statoPerMese ?? {}); // { "anno_mese": "bozza" | "definitivo" }
+  // Turni e stato bozza/definitivo vivono in Supabase (tabelle `turni` e `stato_mese`,
+  // condivise tra tutta la squadra): caricati dopo il login insieme ai profili, vedi
+  // caricaTurniEStato() nell'effetto di autenticazione più sotto. Non partono più da
+  // localStorage, che è per dispositivo e non li terrebbe sincronizzati tra colleghi.
+  const [statoPerMese, setStatoPerMese] = useState({}); // { "anno_mese": "bozza" | "definitivo" }
   const chiaveMese = `${anno}_${mese}`;
   const statoMese = statoPerMese[chiaveMese] ?? "bozza";
-  function toggleStatoMese() {
-    setStatoPerMese((prev) => ({
-      ...prev,
-      [chiaveMese]: (prev[chiaveMese] ?? "bozza") === "bozza" ? "definitivo" : "bozza",
-    }));
+  async function toggleStatoMese() {
+    const nuovoStato = statoMese === "bozza" ? "definitivo" : "bozza";
+    setStatoPerMese((prev) => ({ ...prev, [chiaveMese]: nuovoStato }));
+    if (supabase) {
+      const { error } = await supabase.from("stato_mese").upsert({ anno, mese, stato: nuovoStato });
+      if (error) {
+        console.error("Errore salvataggio stato mese:", error);
+        alert(`Errore nel salvare lo stato del mese: ${error.message}`);
+      }
+    }
   }
-  const [turni, setTurni] = useState(statoSalvato.turni ?? {}); // { "empId_anno_mese_giorno": { code, dnm } }
+  const [turni, setTurni] = useState({}); // { "empId_anno_mese_giorno": { code, dnm } }
+  // Ultima "fotografia" di `turni` così come salvata su Supabase: usata da salvaTurni()
+  // per capire cosa scrivere/eliminare senza rimandare giù l'intera tabella a ogni salvataggio.
+  const turniSincronizzatiRef = useRef({});
+  const [salvandoTurni, setSalvandoTurni] = useState(false);
   const [coperturaRegole, setCoperturaRegole] = useState(statoSalvato.coperturaRegole ?? COPERTURA_DEFAULT);
   const [preferenze, setPreferenze] = useState(statoSalvato.preferenze ?? {});
   const [richiesteSwap, setRichiesteSwap] = useState(statoSalvato.richiesteSwap ?? []);
@@ -394,13 +407,11 @@ export default function PlannerTurni() {
   }
 
   // Salva su localStorage a ogni modifica dei dati (non dello stato di sola UI), così
-  // assegnare un turno o inviare una richiesta sopravvive al refresh della pagina. I
-  // dipendenti non sono più qui: vivono in Supabase (vedi l'effetto di autenticazione).
+  // inviare una richiesta sopravvive al refresh della pagina. Dipendenti, turni e stato
+  // bozza/definitivo non sono più qui: vivono in Supabase (vedi l'effetto di autenticazione).
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        statoPerMese,
-        turni,
         coperturaRegole,
         preferenze,
         richiesteSwap,
@@ -414,7 +425,7 @@ export default function PlannerTurni() {
     } catch {
       // storage non disponibile (es. modalità privata/quota esaurita): l'app resta usabile in memoria
     }
-  }, [statoPerMese, turni, coperturaRegole, preferenze, richiesteSwap, richiesteAssenza, richiestePreassegnazione, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
+  }, [coperturaRegole, preferenze, richiesteSwap, richiesteAssenza, richiestePreassegnazione, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
 
   // ---------- Autenticazione (Supabase) ----------
 
@@ -432,6 +443,29 @@ export default function PlannerTurni() {
     return profili;
   }
 
+  // Carica turni e stato bozza/definitivo (condivisi tra tutta la squadra) da Supabase.
+  // `turniSincronizzatiRef` tiene la "fotografia" di ciò che risulta scritto sul database,
+  // così salvaTurni() può poi calcolare solo la differenza da scrivere/eliminare.
+  async function caricaTurniEStato() {
+    const [{ data: righeTurni, error: erroreTurni }, { data: righeStato, error: erroreStato }] = await Promise.all([
+      supabase.from("turni").select("*"),
+      supabase.from("stato_mese").select("*"),
+    ]);
+    if (erroreTurni) console.error("Errore caricamento turni:", erroreTurni);
+    if (erroreStato) console.error("Errore caricamento stato mese:", erroreStato);
+    const turniCaricati = {};
+    (righeTurni ?? []).forEach((r) => {
+      turniCaricati[keyTurno(r.profile_id, r.anno, r.mese, r.giorno)] = { code: r.code, dnm: r.dnm };
+    });
+    const statoCaricato = {};
+    (righeStato ?? []).forEach((r) => {
+      statoCaricato[`${r.anno}_${r.mese}`] = r.stato;
+    });
+    setTurni(turniCaricati);
+    setStatoPerMese(statoCaricato);
+    turniSincronizzatiRef.current = turniCaricati;
+  }
+
   useEffect(() => {
     if (!supabase) {
       setSessionePronta(true);
@@ -445,16 +479,94 @@ export default function PlannerTurni() {
       }
       if (sessione?.user) {
         const profili = await ricaricaDipendenti();
+        await caricaTurniEStato();
         const mio = profili.find((p) => p.id === sessione.user.id);
         setUtenteLoggato({ id: sessione.user.id, isAdmin: !!mio?.isAdmin, email: sessione.user.email });
       } else {
         setUtenteLoggato(null);
         setDipendenti([]);
+        setTurni({});
+        setStatoPerMese({});
+        turniSincronizzatiRef.current = {};
       }
       setSessionePronta(true);
     });
     return () => sottoscrizione.subscription.unsubscribe();
   }, []);
+
+  // Calcola cosa cambiare su Supabase (upsert per le celle nuove/modificate, delete per
+  // quelle rimosse) confrontando lo stato attuale con l'ultima fotografia sincronizzata,
+  // invece di riscrivere sempre l'intera tabella. Admin-only: è l'unico punto in cui le
+  // modifiche fatte sul calendario (assegnazioni manuali, cambi, approvazioni…) diventano
+  // visibili agli altri utenti — prima restavano solo nel browser di chi le aveva fatte.
+  async function salvaTurni() {
+    if (!supabase) return;
+    setSalvandoTurni(true);
+    const precedenti = turniSincronizzatiRef.current;
+    const daScrivere = [];
+    Object.entries(turni).forEach(([key, valore]) => {
+      const precedente = precedenti[key];
+      if (!precedente || precedente.code !== valore.code || !!precedente.dnm !== !!valore.dnm) {
+        const [empId, annoK, meseK, giornoK] = key.split("_");
+        daScrivere.push({
+          profile_id: empId,
+          anno: Number(annoK),
+          mese: Number(meseK),
+          giorno: Number(giornoK),
+          code: valore.code,
+          dnm: !!valore.dnm,
+        });
+      }
+    });
+    const daEliminare = Object.keys(precedenti).filter((key) => !turni[key]);
+
+    if (daScrivere.length > 0) {
+      const { error } = await supabase.from("turni").upsert(daScrivere, { onConflict: "profile_id,anno,mese,giorno" });
+      if (error) {
+        setSalvandoTurni(false);
+        alert(`Errore nel salvare i turni: ${error.message}`);
+        return;
+      }
+    }
+    for (const key of daEliminare) {
+      const [empId, annoK, meseK, giornoK] = key.split("_");
+      const { error } = await supabase
+        .from("turni")
+        .delete()
+        .match({ profile_id: empId, anno: Number(annoK), mese: Number(meseK), giorno: Number(giornoK) });
+      if (error) {
+        setSalvandoTurni(false);
+        alert(`Errore nell'eliminare un turno: ${error.message}`);
+        return;
+      }
+    }
+    turniSincronizzatiRef.current = turni;
+    setSalvandoTurni(false);
+  }
+
+  // Scrive/elimina subito su Supabase una singola cella di `turni`. Serve per le mutazioni
+  // "puntuali" che nascono da un'approvazione o da uno scambio (assenza approvata,
+  // pre-assegnazione applicata, swap accettato): possono avvenire nel browser di
+  // QUALSIASI utente, non solo dell'admin, quindi non possono aspettare che qualcuno prema
+  // "Salva turni" (che esiste solo nella pagina Calendario, per le modifiche manuali in blocco).
+  async function sincronizzaTurnoSingolo(key, valore) {
+    if (!supabase) return;
+    const [empId, annoK, meseK, giornoK] = key.split("_");
+    const riga = { profile_id: empId, anno: Number(annoK), mese: Number(meseK), giorno: Number(giornoK) };
+    const { error } = valore
+      ? await supabase.from("turni").upsert({ ...riga, code: valore.code, dnm: !!valore.dnm }, { onConflict: "profile_id,anno,mese,giorno" })
+      : await supabase.from("turni").delete().match(riga);
+    if (error) {
+      console.error("Errore sincronizzazione turno:", error);
+      return;
+    }
+    if (valore) {
+      turniSincronizzatiRef.current = { ...turniSincronizzatiRef.current, [key]: valore };
+    } else {
+      const { [key]: rimosso, ...resto } = turniSincronizzatiRef.current;
+      turniSincronizzatiRef.current = resto;
+    }
+  }
 
   const numGiorni = giorniDelMese(anno, mese);
   const giorniArray = Array.from({ length: numGiorni }, (_, i) => i + 1);
@@ -494,6 +606,14 @@ export default function PlannerTurni() {
     setLoginEmail("");
     setLoginPin("");
     setPannelloAccountAperto(false);
+  }
+
+  // Il motivo è obbligatorio: se l'admin annulla il prompt o lo lascia vuoto, il
+  // rifiuto non viene proprio inviato (il chiamante controlla il valore restituito).
+  function richiediMotivoRifiuto() {
+    const motivo = window.prompt("Motivo del rifiuto (obbligatorio):");
+    if (!motivo || !motivo.trim()) return null;
+    return motivo.trim();
   }
 
   // ---------- Recupero PIN dimenticato ----------
@@ -962,7 +1082,25 @@ export default function PlannerTurni() {
       );
       return;
     }
-    setTurni(esito.turni);
+    // In un mese Definitivo "Assegna automaticamente" è già bloccato del tutto, quindi
+    // non serve altra protezione. In Bozza invece una rigenerazione potrebbe cancellare
+    // lo scambio appena concordato: i due turni scambiati si bloccano (DNM) per restare
+    // fissi anche se l'admin rigenera l'assegnazione automatica.
+    const statoMeseSwap = statoPerMese[`${richiesta.annoDa}_${richiesta.meseDa}`] ?? "bozza";
+    let turniFinali = esito.turni;
+    const kDa = keyTurno(richiesta.daEmpId, richiesta.annoDa, richiesta.meseDa, richiesta.giornoDa);
+    const kA = keyTurno(richiesta.aEmpId, richiesta.annoA, richiesta.meseA, richiesta.giornoA);
+    if (statoMeseSwap === "bozza") {
+      turniFinali = { ...turniFinali };
+      if (turniFinali[kDa]) turniFinali[kDa] = { ...turniFinali[kDa], dnm: true };
+      if (turniFinali[kA]) turniFinali[kA] = { ...turniFinali[kA], dnm: true };
+    }
+    setTurni(turniFinali);
+    // Attenzione: uno scambio può anche svuotare una cella (es. verso un giorno senza
+    // turno) — sincronizzaTurnoSingolo va chiamata comunque, con valore undefined,
+    // così la riga viene eliminata su Supabase invece di restare orfana.
+    sincronizzaTurnoSingolo(kDa, turniFinali[kDa]);
+    sincronizzaTurnoSingolo(kA, turniFinali[kA]);
   }
 
   // Il collega destinatario risponde: in Bozza l'accettazione applica subito, in Definitivo
@@ -989,16 +1127,16 @@ export default function PlannerTurni() {
   }
 
   // L'admin risponde, solo quando la richiesta è in attesa sua (mese Definitivo).
-  function rispondiSwapAdmin(id, approva) {
+  function rispondiSwapAdmin(id, approva, motivoRifiuto) {
     const richiesta = richiesteSwap.find((r) => r.id === id);
     if (!richiesta) return;
     const nuovoStato = approva ? approvaSwapAdmin() : rifiutaSwapAdmin();
-    setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato } : r)));
+    setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato, motivoRifiuto: approva ? null : motivoRifiuto } : r)));
     if (nuovoStato === STATI_SWAP.APPLICATA) {
       applicaSwapEffettivo(richiesta);
       inviaPush(richiesta.daEmpId, "Cambio turno accettato", "L'admin ha approvato il tuo cambio turno.");
     } else {
-      inviaPush(richiesta.daEmpId, "Cambio turno rifiutato", "L'admin ha rifiutato il tuo cambio turno.");
+      inviaPush(richiesta.daEmpId, "Cambio turno rifiutato", `L'admin ha rifiutato il tuo cambio turno. Motivo: ${motivoRifiuto}`);
     }
   }
 
@@ -1029,27 +1167,26 @@ export default function PlannerTurni() {
     );
   }
 
-  function gestisciAssenza(id, decisione) {
+  function gestisciAssenza(id, decisione, motivoRifiuto) {
     setRichiesteAssenza((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, stato: decisione } : r))
+      prev.map((r) => (r.id === id ? { ...r, stato: decisione, motivoRifiuto: decisione === "approvata" ? null : motivoRifiuto } : r))
     );
     const r = richiesteAssenza.find((r) => r.id === id);
-    if (decisione === "approvata") {
-      if (r) {
-        const k = keyTurno(r.empId, r.anno, r.mese, r.giorno);
-        setTurni((prev) => {
-          const esito = canModifyShift(prev[k]);
-          if (!esito.allowed) {
-            alert(`Impossibile applicare l'assenza approvata: ${esito.reason}`);
-            return prev;
-          }
-          return { ...prev, [k]: { code: r.tipo, dnm: false } };
-        });
+    if (decisione === "approvata" && r) {
+      const k = keyTurno(r.empId, r.anno, r.mese, r.giorno);
+      const esito = canModifyShift(turni[k]);
+      if (!esito.allowed) {
+        alert(`Impossibile applicare l'assenza approvata: ${esito.reason}`);
+      } else {
+        const nuovoValore = { code: r.tipo, dnm: false };
+        setTurni((prev) => ({ ...prev, [k]: nuovoValore }));
+        sincronizzaTurnoSingolo(k, nuovoValore);
       }
     }
     if (r) {
       const tipoLabel = r.tipo === "F" ? "Ferie" : "Permesso";
-      inviaPush(r.empId, decisione === "approvata" ? `${tipoLabel} approvate` : `${tipoLabel} rifiutate`, `La tua richiesta è stata ${decisione === "approvata" ? "approvata" : "rifiutata"}.`);
+      const corpo = decisione === "approvata" ? "La tua richiesta è stata approvata." : `La tua richiesta è stata rifiutata. Motivo: ${motivoRifiuto}`;
+      inviaPush(r.empId, decisione === "approvata" ? `${tipoLabel} approvate` : `${tipoLabel} rifiutate`, corpo);
     }
   }
 
@@ -1061,14 +1198,14 @@ export default function PlannerTurni() {
   function applicaPreassegnazioneTurno(empId, giorno, annoTarget, meseTarget, turno) {
     const codice = turno === "LIBERO" ? "R" : turno;
     const k = keyTurno(empId, annoTarget, meseTarget, giorno);
-    setTurni((prev) => {
-      const esito = canModifyShift(prev[k]);
-      if (!esito.allowed) {
-        alert(`Impossibile applicare la pre-assegnazione: ${esito.reason}`);
-        return prev;
-      }
-      return { ...prev, [k]: { code: codice, dnm: true } };
-    });
+    const esito = canModifyShift(turni[k]);
+    if (!esito.allowed) {
+      alert(`Impossibile applicare la pre-assegnazione: ${esito.reason}`);
+      return;
+    }
+    const nuovoValore = { code: codice, dnm: true };
+    setTurni((prev) => ({ ...prev, [k]: nuovoValore }));
+    sincronizzaTurnoSingolo(k, nuovoValore);
   }
 
   function richiediPreassegnazione(empId, giorno, annoRichiesta, meseRichiesta, turno, nota) {
@@ -1089,16 +1226,17 @@ export default function PlannerTurni() {
     }
   }
 
-  function gestisciPreassegnazione(id, decisione) {
+  function gestisciPreassegnazione(id, decisione, motivoRifiuto) {
     setRichiestePreassegnazione((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, stato: decisione } : r))
+      prev.map((r) => (r.id === id ? { ...r, stato: decisione, motivoRifiuto: decisione === "approvata" ? null : motivoRifiuto } : r))
     );
     const r = richiestePreassegnazione.find((r) => r.id === id);
     if (decisione === "approvata") {
       if (r) applicaPreassegnazioneTurno(r.empId, r.giorno, r.anno, r.mese, r.turno);
     }
     if (r) {
-      inviaPush(r.empId, decisione === "approvata" ? "Pre-assegnazione approvata" : "Pre-assegnazione rifiutata", `La tua richiesta è stata ${decisione === "approvata" ? "approvata" : "rifiutata"}.`);
+      const corpo = decisione === "approvata" ? "La tua richiesta è stata approvata." : `La tua richiesta è stata rifiutata. Motivo: ${motivoRifiuto}`;
+      inviaPush(r.empId, decisione === "approvata" ? "Pre-assegnazione approvata" : "Pre-assegnazione rifiutata", corpo);
     }
   }
 
@@ -1588,7 +1726,7 @@ export default function PlannerTurni() {
     // sempre visibile, indipendentemente da dove si trovi il bottone che lo apre.
     pannelloNotifiche: (isMobile) => ({
       position: isMobile ? "fixed" : "absolute",
-      top: isMobile ? "64px" : "calc(100% + 8px)",
+      top: isMobile ? "12px" : "calc(100% + 8px)",
       right: isMobile ? "12px" : 0,
       left: isMobile ? "12px" : "auto",
       width: isMobile ? "auto" : "320px",
@@ -1884,7 +2022,7 @@ export default function PlannerTurni() {
             </button>
             {pannelloNotificheAperto && (
               <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setPannelloNotificheAperto(false)} />
+                <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(20,21,35,0.45)" }} onClick={() => setPannelloNotificheAperto(false)} />
                 <div style={styles.pannelloNotifiche(isMobile)}>
                   <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 8px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                     Notifiche
@@ -1922,7 +2060,7 @@ export default function PlannerTurni() {
             </button>
             {pannelloAccountAperto && (
               <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setPannelloAccountAperto(false)} />
+                <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(20,21,35,0.45)" }} onClick={() => setPannelloAccountAperto(false)} />
                 <div style={styles.pannelloNotifiche(isMobile)}>
                   <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 10px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                     Il mio account
@@ -2048,12 +2186,18 @@ export default function PlannerTurni() {
                     >
                       {statoMese === "bozza" ? "Rendi Definitivo" : "Riporta a Bozza"}
                     </button>
+                    <PulsanteSalva
+                      onSalva={salvaTurni}
+                      disabled={salvandoTurni}
+                      styles={styles}
+                      testo={salvandoTurni ? "Salvataggio…" : "Salva turni"}
+                    />
                   </div>
                 )}
               </div>
 
               <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "8px" }}>
-                Lo stato Bozza/Definitivo riguarda solo {nomeMese}: ogni mese ha il proprio stato indipendente. "Assegna automaticamente" genera i turni solo per {nomeMese}: gli altri mesi non vengono toccati. Ogni click riparte da zero (i turni bloccati con 🔒 restano fissi, il resto viene ricalcolato e può variare). "Imposta riposi mesi successivi" pre-compila solo i giorni di riposo (non i turni di copertura) per i 12 mesi dopo quello visualizzato, applicando la stessa regola di rotazione — utile per fissare in anticipo i weekend/riposi anche se i turni veri e propri verranno assegnati più avanti.
+                Lo stato Bozza/Definitivo riguarda solo {nomeMese}: ogni mese ha il proprio stato indipendente. "Assegna automaticamente" genera i turni solo per {nomeMese}: gli altri mesi non vengono toccati. Ogni click riparte da zero (i turni bloccati con 🔒 restano fissi, il resto viene ricalcolato e può variare). "Imposta riposi mesi successivi" pre-compila solo i giorni di riposo (non i turni di copertura) per i 12 mesi dopo quello visualizzato, applicando la stessa regola di rotazione — utile per fissare in anticipo i weekend/riposi anche se i turni veri e propri verranno assegnati più avanti. Le assegnazioni sul calendario restano solo su questo dispositivo finché non premi "Salva turni": solo allora diventano visibili a tutta la squadra.
               </p>
 
               {conflitti.length > 0 && (
@@ -2534,6 +2678,7 @@ export default function PlannerTurni() {
                     {da?.cognome} ({formattaData(r.giornoDa, r.meseDa, r.annoDa)}{r.turnoDa ? `, turno ${r.turnoDa}` : ""}) ↔{" "}
                     {a?.cognome} ({formattaData(r.giornoA, r.meseA, r.annoA)}{r.turnoA ? `, turno ${r.turnoA}` : ""}) — <em style={{ color: COLORI.muted }}>{ETICHETTE_STATO[r.stato] || r.stato}</em>
                     {r.notaSistema && <><br /><span style={{ fontSize: "11px", color: "#8A4A2B" }}>{r.notaSistema}</span></>}
+                    {r.motivoRifiuto && <><br /><em style={{ fontSize: "11px", color: COLORI.avvisoTesto }}>Motivo: {r.motivoRifiuto}</em></>}
                   </span>
                   {riguardaMe && r.stato === STATI_SWAP.IN_ATTESA_COLLEGA && (
                     <span style={{ display: "flex", gap: "6px" }}>
@@ -2544,7 +2689,7 @@ export default function PlannerTurni() {
                   {isAdmin && r.stato === STATI_SWAP.IN_ATTESA_ADMIN && (
                     <span style={{ display: "flex", gap: "6px" }}>
                       <button style={styles.buttonSecondary} onClick={() => rispondiSwapAdmin(r.id, true)}>Approva</button>
-                      <button style={styles.buttonSecondary} onClick={() => rispondiSwapAdmin(r.id, false)}>Rifiuta</button>
+                      <button style={styles.buttonSecondary} onClick={() => { const motivo = richiediMotivoRifiuto(); if (motivo) rispondiSwapAdmin(r.id, false, motivo); }}>Rifiuta</button>
                     </span>
                   )}
                 </div>
@@ -2578,11 +2723,12 @@ export default function PlannerTurni() {
                       {r.oraInizio && r.oraFine ? ` (${r.oraInizio}-${r.oraFine})` : ""}
                       {r.nota ? <><br /><em style={{ color: COLORI.muted }}>Nota: {r.nota}</em></> : null}
                       {" — "}<em style={{ color: COLORI.muted }}>{r.stato}</em>
+                      {r.motivoRifiuto ? <><br /><em style={{ color: COLORI.avvisoTesto }}>Motivo: {r.motivoRifiuto}</em></> : null}
                     </span>
                     {isAdmin && r.stato === "in sospeso" && (
                       <span style={{ display: "flex", gap: "6px" }}>
                         <button style={styles.buttonSecondary} onClick={() => gestisciAssenza(r.id, "approvata")}>Approva</button>
-                        <button style={styles.buttonSecondary} onClick={() => gestisciAssenza(r.id, "rifiutata")}>Rifiuta</button>
+                        <button style={styles.buttonSecondary} onClick={() => { const motivo = richiediMotivoRifiuto(); if (motivo) gestisciAssenza(r.id, "rifiutata", motivo); }}>Rifiuta</button>
                       </span>
                     )}
                   </div>
@@ -2657,11 +2803,12 @@ export default function PlannerTurni() {
                       {emp?.cognome} — {r.turno === "LIBERO" ? "giorno libero" : `turno ${r.turno}`}, {formattaData(r.giorno, r.mese, r.anno)}
                       {r.nota ? <><br /><em style={{ color: COLORI.muted }}>Nota: {r.nota}</em></> : null}
                       {" — "}<em style={{ color: COLORI.muted }}>{r.stato === "approvata" ? "assegnata" : r.stato}</em>
+                      {r.motivoRifiuto ? <><br /><em style={{ color: COLORI.avvisoTesto }}>Motivo: {r.motivoRifiuto}</em></> : null}
                     </span>
                     {isAdmin && r.stato === "in sospeso" && (
                       <span style={{ display: "flex", gap: "6px" }}>
                         <button style={styles.buttonSecondary} onClick={() => gestisciPreassegnazione(r.id, "approvata")}>Approva</button>
-                        <button style={styles.buttonSecondary} onClick={() => gestisciPreassegnazione(r.id, "rifiutata")}>Rifiuta</button>
+                        <button style={styles.buttonSecondary} onClick={() => { const motivo = richiediMotivoRifiuto(); if (motivo) gestisciPreassegnazione(r.id, "rifiutata", motivo); }}>Rifiuta</button>
                       </span>
                     )}
                   </div>
@@ -3027,7 +3174,10 @@ function RichiediPreassegnazioneForm({ empCorrente, dipendenti, isAdmin, annoCor
   const [nota, setNota] = useState("");
 
   const empTarget = isAdmin ? (dipendenti.find((d) => d.id === Number(empSelezionatoId)) || empCorrente) : empCorrente;
-  const turniAmmessi = turniAmmessiDipendente(empTarget);
+  // L'admin può pre-assegnare qualunque tipologia di turno, non solo quelle "proprie"
+  // del ruolo del dipendente (es. dare una Direzione a un diurno per un giorno) — chi
+  // non è admin resta invece limitato ai turni ammessi per il proprio ruolo.
+  const turniAmmessi = isAdmin ? Object.keys(TIPI_TURNO).filter((c) => c !== "R") : turniAmmessiDipendente(empTarget);
   const numGiorniMese = giorniDelMese(anno, mese);
   const giornoSicuro = Math.min(giorno, numGiorniMese);
 
@@ -3272,6 +3422,40 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
   const [erroreCreazione, setErroreCreazione] = useState("");
   const [trascinato, setTrascinato] = useState(null); // indice della riga in trascinamento
 
+  // Form inline "Imposta email/PIN": completa un account creato senza credenziali (o
+  // cambia quelle di un dipendente esistente). Un solo form aperto alla volta.
+  const [credenzialiApertoPer, setCredenzialiApertoPer] = useState(null); // id del dipendente
+  const [emailCredenziali, setEmailCredenziali] = useState("");
+  const [pinCredenziali, setPinCredenziali] = useState("");
+  const [salvandoCredenziali, setSalvandoCredenziali] = useState(false);
+  const [erroreCredenziali, setErroreCredenziali] = useState("");
+
+  function apriCredenziali(d) {
+    setCredenzialiApertoPer(d.id);
+    setEmailCredenziali(d.credenzialiDaImpostare ? "" : d.email ?? "");
+    setPinCredenziali("");
+    setErroreCredenziali("");
+  }
+
+  async function salvaCredenziali(id) {
+    if (!emailCredenziali.trim() || !pinCredenziali.trim()) {
+      setErroreCredenziali("Inserisci sia email che PIN.");
+      return;
+    }
+    setSalvandoCredenziali(true);
+    setErroreCredenziali("");
+    const { data, error } = await supabase.functions.invoke("update-employee-credentials", {
+      body: { id, email: emailCredenziali.trim(), pin: pinCredenziali.trim() },
+    });
+    setSalvandoCredenziali(false);
+    if (error || data?.ok === false) {
+      setErroreCredenziali(data?.error || error?.message || "Errore durante l'aggiornamento.");
+      return;
+    }
+    setCredenzialiApertoPer(null);
+    await onRicarica();
+  }
+
   // Il componente non possiede più i dati: `dipendenti` arriva da Supabase (tramite il
   // genitore) e può cambiare sotto i piedi (un altro admin modifica, o dopo un salvataggio
   // proprio) — la bozza locale si riallinea quando cambia la fonte.
@@ -3301,7 +3485,13 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
   // La creazione crea un vero account (Supabase Auth + riga profiles) tramite una Edge
   // Function con privilegi elevati: il client non ha mai accesso diretto a quel livello.
   async function creaDipendente() {
-    if (!nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.email.trim() || !nuovo.pin.trim()) return;
+    if (!nuovo.cognome.trim() || !nuovo.nome.trim()) return;
+    // Email e PIN sono opzionali, ma vanno dati insieme o non dati affatto: non avrebbe
+    // senso salvare solo uno dei due (vedi "Imposta email/PIN" per completarli più avanti).
+    if ((nuovo.email.trim() && !nuovo.pin.trim()) || (!nuovo.email.trim() && nuovo.pin.trim())) {
+      setErroreCreazione("Inserisci sia email che PIN, oppure lasciali entrambi vuoti per impostarli più avanti.");
+      return;
+    }
     setCreando(true);
     setErroreCreazione("");
     // FIX #3: rotationSlot stabile assegnato UNA VOLTA alla creazione — il primo intero
@@ -3310,8 +3500,8 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
     const colore = COLORI_DIPENDENTE[bozza.length % COLORI_DIPENDENTE.length];
     const { data, error } = await supabase.functions.invoke("create-employee", {
       body: {
-        email: nuovo.email.trim(),
-        pin: nuovo.pin.trim(),
+        email: nuovo.email.trim() || null,
+        pin: nuovo.pin.trim() || null,
         cognome: nuovo.cognome.trim(),
         nome: nuovo.nome.trim(),
         tipo: nuovo.tipo,
@@ -3381,6 +3571,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
               <th style={styles.th}>Riposo</th>
               <th style={styles.th}>Coppia fissa</th>
               <th style={styles.th}>Admin</th>
+              <th style={styles.th}>Accesso</th>
               <th style={styles.th}>Stato</th>
               <th style={styles.th}></th>
             </tr>
@@ -3452,6 +3643,55 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
                     style={{ accentColor: COLORI.teal, width: "16px", height: "16px", cursor: "pointer" }}
                   />
                 </td>
+                <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}`, minWidth: "180px" }}>
+                  {credenzialiApertoPer === d.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "5px", alignItems: "center", padding: "6px 0" }}>
+                      <input
+                        type="email"
+                        style={{ ...styles.input, width: "160px", fontSize: "12px", padding: "5px 8px" }}
+                        placeholder="Email"
+                        value={emailCredenziali}
+                        onChange={(e) => setEmailCredenziali(e.target.value)}
+                      />
+                      <input
+                        style={{ ...styles.input, width: "160px", fontSize: "12px", padding: "5px 8px", fontFamily: "ui-monospace, monospace" }}
+                        placeholder="Nuovo PIN"
+                        value={pinCredenziali}
+                        onChange={(e) => setPinCredenziali(e.target.value)}
+                      />
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button
+                          style={{ ...styles.button, padding: "5px 10px", fontSize: "11px" }}
+                          disabled={salvandoCredenziali}
+                          onClick={() => salvaCredenziali(d.id)}
+                        >
+                          {salvandoCredenziali ? "Salvataggio…" : "Salva"}
+                        </button>
+                        <button
+                          style={{ ...styles.buttonSecondary, padding: "5px 10px", fontSize: "11px" }}
+                          onClick={() => setCredenzialiApertoPer(null)}
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                      {erroreCredenziali && <p style={{ color: COLORI.avvisoTesto, fontSize: "11px", margin: 0 }}>{erroreCredenziali}</p>}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                      {d.credenzialiDaImpostare ? (
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: COLORI.avvisoTesto }}>Email da impostare</span>
+                      ) : (
+                        <span style={{ fontSize: "11px", color: COLORI.muted, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis" }} title={d.email ?? ""}>{d.email}</span>
+                      )}
+                      <button
+                        style={{ ...styles.buttonSecondary, padding: "4px 9px", fontSize: "11px" }}
+                        onClick={() => apriCredenziali(d)}
+                      >
+                        {d.credenzialiDaImpostare ? "Imposta email/PIN" : "Modifica"}
+                      </button>
+                    </div>
+                  )}
+                </td>
                 <td style={{ textAlign: "center", borderBottom: `1px solid ${COLORI.hairline}` }}>
                   <button
                     style={{ ...styles.buttonSecondary, padding: "5px 10px", fontSize: "11px" }}
@@ -3485,7 +3725,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
       <div style={{ marginTop: "18px", paddingTop: "16px", borderTop: `1px solid ${COLORI.hairline}` }}>
         <label style={styles.label}>Crea dipendente</label>
         <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "2px", marginBottom: "6px" }}>
-          Crea un account vero e proprio: email e PIN andranno usati dal dipendente per accedere.
+          Email e PIN sono quelli con cui il dipendente accederà. Puoi lasciarli vuoti e impostarli più avanti (dalla colonna "Accesso"): il dipendente comparirà comunque in squadra, ma non potrà accedere finché non li imposti.
         </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
           <input
@@ -3512,13 +3752,13 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
           <input
             type="email"
             style={{ ...styles.input, width: "170px" }}
-            placeholder="Email"
+            placeholder="Email (opzionale)"
             value={nuovo.email}
             onChange={(e) => setNuovo({ ...nuovo, email: e.target.value })}
           />
           <input
-            style={{ ...styles.input, width: "90px", fontFamily: "ui-monospace, monospace" }}
-            placeholder="PIN"
+            style={{ ...styles.input, width: "110px", fontFamily: "ui-monospace, monospace" }}
+            placeholder="PIN (opzionale)"
             value={nuovo.pin}
             onChange={(e) => setNuovo({ ...nuovo, pin: e.target.value })}
           />
@@ -3533,7 +3773,7 @@ function SchedaDipendenti({ dipendenti, turni, onRicarica, styles }) {
           </label>
           <button
             style={styles.button}
-            disabled={creando || !nuovo.cognome.trim() || !nuovo.nome.trim() || !nuovo.email.trim() || !nuovo.pin.trim()}
+            disabled={creando || !nuovo.cognome.trim() || !nuovo.nome.trim()}
             onClick={creaDipendente}
           >
             {creando ? "Creazione…" : "Crea"}
