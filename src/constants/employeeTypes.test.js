@@ -32,3 +32,19 @@ describe("FIX #9 — CE come turno extra di ruolo", () => {
     expect(turniAmmessiDipendente({ tipo: "fom" })).not.toContain("CE");
   });
 });
+
+describe("FOM come riserva su A1/A2/C1/C2", () => {
+  it("A1/A2/C1/C2 sono turni extra (riserva) del FOM, non di base", () => {
+    const fom = { tipo: "fom" };
+    expect(turniBaseDipendente(fom)).toEqual(["F1", "F2"]);
+    expect(turniExtraDipendente(fom)).toEqual(expect.arrayContaining(["A1", "A2", "C1", "C2"]));
+  });
+
+  it("il FOM non è mai riserva sulla Notte", () => {
+    expect(turniExtraDipendente({ tipo: "fom" })).not.toContain("N");
+  });
+
+  it("A1/A2/C1/C2 sono selezionabili per il FOM tramite turniAmmessiDipendente", () => {
+    expect(turniAmmessiDipendente({ tipo: "fom" })).toEqual(expect.arrayContaining(["F1", "F2", "A1", "A2", "C1", "C2"]));
+  });
+});

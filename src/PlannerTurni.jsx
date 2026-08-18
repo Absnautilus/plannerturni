@@ -189,6 +189,21 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+// Risale dagli antenati DOM di un elemento cercando il primo che scorre orizzontalmente
+// (es. la tabella del calendario, più larga dello schermo su mobile): serve allo swipe
+// cambia-tab per non "rubare" il gesto a chi sta scorrendo la tabella lateralmente.
+function trovaAntenatoScrollabileOrizzontale(elemento) {
+  let el = elemento;
+  while (el && el !== document.body) {
+    if (el.scrollWidth > el.clientWidth + 1) {
+      const overflowX = window.getComputedStyle(el).overflowX;
+      if (overflowX === "auto" || overflowX === "scroll") return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
 // Genera le celle del calendario per un mese (settimane complete, Lun-Dom), includendo
 // i giorni "di contorno" del mese precedente/successivo per riempire la griglia.
 function generaGrigliaMese(anno, mese) {
@@ -355,6 +370,7 @@ export default function PlannerTurni() {
   const [nuovoPinRecupero, setNuovoPinRecupero] = useState("");
   const [messaggioNuovoPinRecupero, setMessaggioNuovoPinRecupero] = useState("");
   const [pannelloAccountAperto, setPannelloAccountAperto] = useState(false);
+  const [menuAvatarAperto, setMenuAvatarAperto] = useState(false);
   const [nuovaEmailAccount, setNuovaEmailAccount] = useState("");
   const [nuovoPinAccount, setNuovoPinAccount] = useState("");
   const [messaggioAccount, setMessaggioAccount] = useState("");
@@ -363,6 +379,17 @@ export default function PlannerTurni() {
 
   const [tab, setTab] = useState("calendario");
   const [cellaSelezionata, setCellaSelezionata] = useState(null); // { empId, giorno }
+  // Su mobile la colonna "Dipendente" del calendario mostra solo l'avatar per lasciare più
+  // spazio ai giorni: il nome compare solo per le righe qui dentro, toccando l'avatar per
+  // aprirlo/richiuderlo. Nessun effetto su desktop, dove il nome è sempre visibile.
+  const [righeCalendarioEspanse, setRigheCalendarioEspanse] = useState(() => new Set());
+  function toggleRigaCalendarioEspansa(empId) {
+    setRigheCalendarioEspanse((prev) => {
+      const next = new Set(prev);
+      if (next.has(empId)) next.delete(empId); else next.add(empId);
+      return next;
+    });
+  }
   const [nuovoCodiceRegola, setNuovoCodiceRegola] = useState("");
   const [meseMiei, setMeseMiei] = useState(oggi.getMonth());
   const [annoMiei, setAnnoMiei] = useState(oggi.getFullYear());
@@ -1836,12 +1863,15 @@ export default function PlannerTurni() {
     // qualunque nell'header può trovarsi vicino al bordo, e un pannello ancorato lì
     // rischierebbe di uscire dallo schermo. Fissarlo a destra della viewport lo tiene
     // sempre visibile, indipendentemente da dove si trovi il bottone che lo apre.
+    // Ancorato subito sotto il bottone che lo apre (mai sopra, mai a coprirlo): stesso
+    // comportamento su mobile e desktop, solo più stretto su mobile per non uscire dallo
+    // schermo dato che i bottoni che lo aprono sono vicini al bordo destro dell'header.
     pannelloNotifiche: (isMobile) => ({
-      position: isMobile ? "fixed" : "absolute",
-      top: isMobile ? "12px" : "calc(100% + 8px)",
-      right: isMobile ? "12px" : 0,
-      left: isMobile ? "12px" : "auto",
-      width: isMobile ? "auto" : "320px",
+      position: "absolute",
+      top: "calc(100% + 8px)",
+      right: 0,
+      left: "auto",
+      width: isMobile ? "260px" : "320px",
       maxHeight: isMobile ? "70vh" : "360px",
       overflowY: "auto",
       background: COLORI.card,
@@ -2088,6 +2118,34 @@ export default function PlannerTurni() {
     { id: "preassegnazioni", label: "Pre-assegnazioni" },
   ];
 
+  // Swipe orizzontale per cambiare tab: ignora il gesto se parte da dentro un elemento che
+  // scorre a sua volta in orizzontale (es. la tabella del calendario), altrimenti uno scroll
+  // laterale nella tabella cambierebbe tab invece di scorrere la tabella.
+  const touchInizioRef = useRef(null);
+  function alTouchStartContenuto(e) {
+    const tocco = e.touches[0];
+    touchInizioRef.current = {
+      x: tocco.clientX,
+      y: tocco.clientY,
+      suScrollabile: !!trovaAntenatoScrollabileOrizzontale(e.target),
+    };
+  }
+  function alTouchEndContenuto(e) {
+    const inizio = touchInizioRef.current;
+    touchInizioRef.current = null;
+    if (!inizio || inizio.suScrollabile) return;
+    const tocco = e.changedTouches[0];
+    const deltaX = tocco.clientX - inizio.x;
+    const deltaY = tocco.clientY - inizio.y;
+    const SOGLIA = 60;
+    if (Math.abs(deltaX) < SOGLIA || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+    const indiceAttuale = vociNav.findIndex((v) => v.id === tab);
+    if (indiceAttuale === -1) return;
+    const prossimoIndice = deltaX < 0 ? indiceAttuale + 1 : indiceAttuale - 1;
+    if (prossimoIndice < 0 || prossimoIndice >= vociNav.length) return;
+    setTab(vociNav[prossimoIndice].id);
+  }
+
   return (
     <div className="planner-turni-app" style={styles.page}>
       <style>{GLOBAL_STYLE}</style>
@@ -2102,22 +2160,63 @@ export default function PlannerTurni() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px" }}>
-          <div
-            title={`${empCorrente?.cognome} ${empCorrente?.nome}${isAdmin ? " · Admin" : ""}`}
-            style={{
-              width: "38px",
-              height: "38px",
-              borderRadius: "50%",
-              background: empCorrente?.colore,
-              color: testoContrastante(empCorrente?.colore || "#000000"),
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 700,
-              fontSize: "13px",
-            }}
-          >
-            {empCorrente?.nome?.[0]}{empCorrente?.cognome?.[0]}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setMenuAvatarAperto((prev) => !prev)}
+              title={`${empCorrente?.cognome} ${empCorrente?.nome}${isAdmin ? " · Admin" : ""}`}
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "50%",
+                background: empCorrente?.colore,
+                color: testoContrastante(empCorrente?.colore || "#000000"),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: "13px",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                fontFamily: "inherit",
+              }}
+            >
+              {empCorrente?.nome?.[0]}{empCorrente?.cognome?.[0]}
+            </button>
+            {menuAvatarAperto && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(20,21,35,0.45)" }} onClick={() => setMenuAvatarAperto(false)} />
+                <div style={styles.pannelloNotifiche(isMobile)}>
+                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 8px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    {empCorrente?.nome} {empCorrente?.cognome}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setMenuAvatarAperto(false); handleLogout(); }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      width: "100%",
+                      padding: "9px 8px",
+                      background: "none",
+                      border: "none",
+                      borderRadius: "10px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: COLORI.ink,
+                      textAlign: "left",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <IconEsci dimensione={16} colore={COLORI.muted} />
+                    Esci
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{ position: "relative" }}>
@@ -2229,10 +2328,6 @@ export default function PlannerTurni() {
               </>
             )}
           </div>
-
-          <button type="button" onClick={handleLogout} title="Esci" style={styles.iconBtn}>
-            <IconEsci dimensione={18} colore={COLORI.muted} />
-          </button>
         </div>
       </div>
 
@@ -2244,7 +2339,7 @@ export default function PlannerTurni() {
         </div>
       </div>
 
-      <div style={styles.container}>
+      <div style={styles.container} onTouchStart={alTouchStartContenuto} onTouchEnd={alTouchEndContenuto}>
         {tab === "calendario" && (
           <>
             <div style={styles.card}>
@@ -2357,14 +2452,19 @@ export default function PlannerTurni() {
                     {dipendentiOperativi.map((d) => (
                       <tr key={d.id}>
                         <td style={{ ...styles.tdEmp, borderLeft: "none" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div
+                            style={{ display: "flex", alignItems: "center", gap: "8px", cursor: isMobile ? "pointer" : "default" }}
+                            onClick={isMobile ? () => toggleRigaCalendarioEspansa(d.id) : undefined}
+                          >
                             <AvatarDipendente d={d} dimensione={26} />
-                            <div>
-                              {d.cognome} {d.nome}
-                              <div style={{ fontSize: "10px", fontWeight: 500, color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                                {TIPI_DIPENDENTE[d.tipo].label}
+                            {(!isMobile || righeCalendarioEspanse.has(d.id)) && (
+                              <div>
+                                {d.cognome} {d.nome}
+                                <div style={{ fontSize: "10px", fontWeight: 500, color: COLORI.muted, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                  {TIPI_DIPENDENTE[d.tipo].label}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </td>
                         {giorniArray.map((g) => {

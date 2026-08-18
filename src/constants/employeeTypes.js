@@ -11,7 +11,12 @@ export const TIPI_DIPENDENTE = {
   turnante: { label: "Turnante", turniAmmessi: ["C1", "C2", "A1", "A2", "N"], turniExtraRuolo: ["CE"] },
   notturno: { label: "Notturno", turniAmmessi: ["N"], turniExtraRuolo: [] },
   direttore: { label: "Direttore", turniAmmessi: ["D1", "D2"], turniExtraRuolo: [] },
-  fom: { label: "Front Office Manager", turniAmmessi: ["F1", "F2"], turniExtraRuolo: [] },
+  // Il FOM copre F1/F2 come turno proprio, ma fa anche da riserva su A1/A2/C1/C2 (mai la
+  // notte) quando un turno di sportello resta scoperto e nessun diurno/turnante è
+  // disponibile: turniExtraRuolo lo rende candidato di riserva nel Passo 2 dell'assegnazione
+  // automatica, PRIMA che il Passo 3 gli assegni F1/F2 sui giorni ancora liberi — così un
+  // giorno in cui copre un buco di reception non gli viene comunque assegnato anche F1/F2.
+  fom: { label: "Front Office Manager", turniAmmessi: ["F1", "F2"], turniExtraRuolo: ["A1", "A2", "C1", "C2"] },
 };
 
 // Turni "propri" del ruolo — pool primario (candidatiBase) nell'assegnazione automatica.
