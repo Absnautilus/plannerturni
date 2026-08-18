@@ -527,6 +527,54 @@ export default function PlannerTurni() {
     return () => sottoscrizione.subscription.unsubscribe();
   }, []);
 
+  // Specchi in ref di stato che cambia spesso (tab, turni): servono all'effetto di
+  // aggiornamento in background qui sotto per leggere sempre il valore più recente senza
+  // dover ricreare l'intervallo/i listener a ogni render (che dipendessero da `tab`/`turni`).
+  const tabRef = useRef(tab);
+  useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
+  const turniRef = useRef(turni);
+  useEffect(() => {
+    turniRef.current = turni;
+  }, [turni]);
+
+  // Aggiorna in background dipendenti, turni/stato mese e richieste: così due persone che
+  // usano l'app nello stesso momento si vedono i cambiamenti a vicenda senza dover ricaricare
+  // la pagina a mano. Non tocca MAI una modifica non ancora salvata: salta `turni` se ci sono
+  // celle modificate ma non ancora premuto "Salva turni" (confronto per contenuto, non per
+  // riferimento — sincronizzaTurnoSingolo crea sempre nuovi oggetti anche quando il contenuto
+  // coincide), e salta `dipendenti` mentre si è sulla scheda Dipendenti (dove potrebbe esserci
+  // una riga in modifica non ancora salvata).
+  useEffect(() => {
+    if (!supabase || !utenteLoggato) return;
+    let inCorso = false;
+    async function aggiornaInBackground() {
+      if (inCorso) return;
+      inCorso = true;
+      try {
+        if (tabRef.current !== "dipendenti") await ricaricaDipendenti();
+        if (JSON.stringify(turniRef.current) === JSON.stringify(turniSincronizzatiRef.current)) {
+          await caricaTurniEStato();
+        }
+        await ricaricaRichieste();
+      } finally {
+        inCorso = false;
+      }
+    }
+    const intervallo = setInterval(aggiornaInBackground, 60000);
+    function alCambioVisibilita() {
+      if (document.visibilityState === "visible") aggiornaInBackground();
+    }
+    document.addEventListener("visibilitychange", alCambioVisibilita);
+    window.addEventListener("focus", aggiornaInBackground);
+    return () => {
+      clearInterval(intervallo);
+      document.removeEventListener("visibilitychange", alCambioVisibilita);
+      window.removeEventListener("focus", aggiornaInBackground);
+    };
+  }, [utenteLoggato]);
+
   // Calcola cosa cambiare su Supabase (upsert per le celle nuove/modificate, delete per
   // quelle rimosse) confrontando lo stato attuale con l'ultima fotografia sincronizzata,
   // invece di riscrivere sempre l'intera tabella. Admin-only: è l'unico punto in cui le
