@@ -69,7 +69,7 @@ const GLOBAL_STYLE = `
   }
   .planner-turni-app button:disabled {
     opacity: 0.45;
-    cursor: not-allowed;
+    cursor: default;
   }
   .planner-turni-app select,
   .planner-turni-app input {
@@ -580,6 +580,9 @@ export default function PlannerTurni() {
   useEffect(() => {
     turniRef.current = turni;
   }, [turni]);
+  // Usato dagli handler di swipe orizzontale (alTouchStartContenuto/alTouchEndContenuto) più
+  // sotto: dichiarato qui, prima di ogni return anticipato, per non violare le Rules of Hooks.
+  const touchInizioRef = useRef(null);
 
   // Aggiorna in background dipendenti, turni/stato mese e richieste: così due persone che
   // usano l'app nello stesso momento si vedono i cambiamenti a vicenda senza dover ricaricare
@@ -1676,13 +1679,13 @@ export default function PlannerTurni() {
     },
     datePickerFreccia: {
       border: "none",
-      background: COLORI.mist,
+      background: hexRgba(COLORI.ottone, 0.12),
       borderRadius: "50%",
       width: "26px",
       height: "26px",
       cursor: "pointer",
       fontSize: "14px",
-      color: COLORI.ink,
+      color: COLORI.ottoneScuro,
       lineHeight: 1,
     },
     datePickerMeseAnno: {
@@ -1703,8 +1706,8 @@ export default function PlannerTurni() {
     },
     datePickerAnnoBtn: (attivo) => ({
       border: "none",
-      background: attivo ? COLORI.teal : COLORI.mist,
-      color: attivo ? "white" : COLORI.ink,
+      background: attivo ? COLORI.teal : hexRgba(COLORI.ottone, 0.12),
+      color: attivo ? "white" : COLORI.ottoneScuro,
       borderRadius: "8px",
       padding: "6px 10px",
       fontSize: "12px",
@@ -1808,13 +1811,15 @@ export default function PlannerTurni() {
       padding: "12px 0",
       borderBottom: `1px solid ${COLORI.hairline}`,
     },
+    // Niente cursor qui: lo decide GLOBAL_STYLE (button:not(:disabled) → pointer,
+    // button:disabled → not-allowed) — un cursor fisso inline vincerebbe sempre sulla
+    // regola CSS e mostrerebbe la manina anche sui pulsanti disabilitati.
     toggleTraccia: (attivo) => ({
       width: "40px",
       height: "22px",
       borderRadius: "999px",
       background: attivo ? COLORI.teal : COLORI.hairlineForte,
       border: "none",
-      cursor: "pointer",
       position: "relative",
       flexShrink: 0,
       padding: 0,
@@ -1830,24 +1835,28 @@ export default function PlannerTurni() {
       transition: "left 0.15s ease",
       boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
     }),
+    // Niente cursor: pointer qui (né sotto in buttonSecondary): un valore fisso inline
+    // vincerebbe sempre sulla regola CSS button:disabled { cursor: not-allowed } di
+    // GLOBAL_STYLE, mostrando la manina anche sui pulsanti disabilitati.
     button: {
       background: COLORI.teal,
       color: "white",
       border: "none",
       padding: "10px 20px",
       borderRadius: "10px",
-      cursor: "pointer",
       fontWeight: 700,
       fontSize: "13px",
       fontFamily: "inherit",
     },
+    // Il viola è lo stesso del logo (COLORI.ottone): un pulsante cliccabile non deve mai
+    // sembrare grigio/disattivato — il grigio (opacity via :disabled in GLOBAL_STYLE) resta
+    // riservato solo a chi ha davvero l'attributo disabled.
     buttonSecondary: {
-      background: COLORI.mist,
-      color: COLORI.ink,
-      border: "none",
+      background: hexRgba(COLORI.ottone, 0.12),
+      color: COLORI.ottoneScuro,
+      border: `1px solid ${hexRgba(COLORI.ottone, 0.25)}`,
       padding: "9px 18px",
       borderRadius: "10px",
-      cursor: "pointer",
       fontWeight: 600,
       fontSize: "13px",
       fontFamily: "inherit",
@@ -1916,8 +1925,8 @@ export default function PlannerTurni() {
       lineHeight: 1.4,
     },
     navFreccia: {
-      background: COLORI.mist,
-      color: COLORI.ink,
+      background: hexRgba(COLORI.ottone, 0.12),
+      color: COLORI.ottoneScuro,
       border: "none",
       width: "36px",
       height: "36px",
@@ -2084,7 +2093,7 @@ export default function PlannerTurni() {
                 <button
                   type="button"
                   onClick={() => { setModalitaRecupero(true); setEmailRecupero(loginEmail); }}
-                  style={{ border: "none", background: "transparent", color: COLORI.tealScuro, fontSize: "12px", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                  style={{ border: "none", background: "transparent", color: COLORI.ottoneScuro, fontSize: "12px", cursor: "pointer", padding: 0, textDecoration: "underline" }}
                 >
                   PIN dimenticato?
                 </button>
@@ -2143,7 +2152,6 @@ export default function PlannerTurni() {
   // Swipe orizzontale per cambiare tab: ignora il gesto se parte da dentro un elemento che
   // scorre a sua volta in orizzontale (es. la tabella del calendario), altrimenti uno scroll
   // laterale nella tabella cambierebbe tab invece di scorrere la tabella.
-  const touchInizioRef = useRef(null);
   function alTouchStartContenuto(e) {
     const tocco = e.touches[0];
     touchInizioRef.current = {
@@ -2843,14 +2851,14 @@ export default function PlannerTurni() {
                       <span style={{ fontSize: "11px", fontWeight: 700, color: COLORI.muted, width: "18px", flexShrink: 0 }}>{indice + 1}°</span>
                       <span style={{ fontSize: "13px", lineHeight: 1.6, color: COLORI.ink, flex: 1 }}>{TESTI_REGOLA_PREFERENZA[chiave]}</span>
                       <button
-                        style={{ border: "none", background: COLORI.mist, borderRadius: "6px", width: "24px", height: "24px", cursor: indice === 0 ? "default" : "pointer", opacity: indice === 0 ? 0.4 : 1, marginRight: "4px" }}
+                        style={{ border: "none", background: hexRgba(COLORI.ottone, 0.12), color: COLORI.ottoneScuro, borderRadius: "6px", width: "24px", height: "24px", marginRight: "4px" }}
                         onClick={() => spostaRegolaPreferenza(chiave, -1)}
                         disabled={indice === 0}
                       >
                         ↑
                       </button>
                       <button
-                        style={{ border: "none", background: COLORI.mist, borderRadius: "6px", width: "24px", height: "24px", cursor: indice === ordineRegolePreferenza.length - 1 ? "default" : "pointer", opacity: indice === ordineRegolePreferenza.length - 1 ? 0.4 : 1, marginRight: "10px" }}
+                        style={{ border: "none", background: hexRgba(COLORI.ottone, 0.12), color: COLORI.ottoneScuro, borderRadius: "6px", width: "24px", height: "24px", marginRight: "10px" }}
                         onClick={() => spostaRegolaPreferenza(chiave, 1)}
                         disabled={indice === ordineRegolePreferenza.length - 1}
                       >
