@@ -26,6 +26,14 @@ import {
 import { puoEliminareDefinitivamente, disattivaDipendente, attivaDipendente } from "./domain/employeeLifecycle.js";
 import { generaICS } from "./domain/icsExport.js";
 import { profiloDaRiga, rigaDaProfiloParziale } from "./domain/profiliMapper.js";
+import {
+  swapDaRiga,
+  rigaDaSwap,
+  assenzaDaRiga,
+  rigaDaAssenza,
+  preassegnazioneDaRiga,
+  rigaDaPreassegnazione,
+} from "./domain/richiesteMapper.js";
 import { supabase, RESTA_CONNESSO_KEY } from "./lib/supabaseClient.js";
 import logoPlannerTurni from "./assets/logo-planner-turni.png";
 import logoIcona from "./assets/logo-icon.png";
@@ -319,9 +327,12 @@ export default function PlannerTurni() {
   const [salvandoTurni, setSalvandoTurni] = useState(false);
   const [coperturaRegole, setCoperturaRegole] = useState(statoSalvato.coperturaRegole ?? COPERTURA_DEFAULT);
   const [preferenze, setPreferenze] = useState(statoSalvato.preferenze ?? {});
-  const [richiesteSwap, setRichiesteSwap] = useState(statoSalvato.richiesteSwap ?? []);
-  const [richiesteAssenza, setRichiesteAssenza] = useState(statoSalvato.richiesteAssenza ?? []);
-  const [richiestePreassegnazione, setRichiestePreassegnazione] = useState(statoSalvato.richiestePreassegnazione ?? []);
+  // Richieste swap/assenza/pre-assegnazione vivono in Supabase (condivise tra tutta la
+  // squadra, con id generati dal database): caricate dopo il login, vedi ricaricaRichieste()
+  // nell'effetto di autenticazione più sotto. Non partono più da localStorage.
+  const [richiesteSwap, setRichiesteSwap] = useState([]);
+  const [richiesteAssenza, setRichiesteAssenza] = useState([]);
+  const [richiestePreassegnazione, setRichiestePreassegnazione] = useState([]);
   const [conflitti, setConflitti] = useState(statoSalvato.conflitti ?? []);
   // { [empId]: [idNotifica, ...] } — quali notifiche ha già visto ciascun utente.
   const [notificheLette, setNotificheLette] = useState(statoSalvato.notificheLette ?? {});
@@ -406,17 +417,14 @@ export default function PlannerTurni() {
     });
   }
 
-  // Salva su localStorage a ogni modifica dei dati (non dello stato di sola UI), così
-  // inviare una richiesta sopravvive al refresh della pagina. Dipendenti, turni e stato
-  // bozza/definitivo non sono più qui: vivono in Supabase (vedi l'effetto di autenticazione).
+  // Salva su localStorage a ogni modifica dei dati (non dello stato di sola UI). Dipendenti,
+  // turni, stato bozza/definitivo e le richieste (swap/assenza/pre-assegnazione) non sono
+  // più qui: vivono in Supabase (vedi l'effetto di autenticazione).
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         coperturaRegole,
         preferenze,
-        richiesteSwap,
-        richiesteAssenza,
-        richiestePreassegnazione,
         conflitti,
         regoleAttive,
         ordineRegolePreferenza,
@@ -425,7 +433,7 @@ export default function PlannerTurni() {
     } catch {
       // storage non disponibile (es. modalità privata/quota esaurita): l'app resta usabile in memoria
     }
-  }, [coperturaRegole, preferenze, richiesteSwap, richiesteAssenza, richiestePreassegnazione, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
+  }, [coperturaRegole, preferenze, conflitti, regoleAttive, ordineRegolePreferenza, notificheLette]);
 
   // ---------- Autenticazione (Supabase) ----------
 
@@ -466,6 +474,27 @@ export default function PlannerTurni() {
     turniSincronizzatiRef.current = turniCaricati;
   }
 
+  // Carica le tre liste di richieste (swap, assenza, pre-assegnazione) da Supabase: sono
+  // condivise tra tutta la squadra, quindi vanno ricaricate dopo ogni scrittura (non c'è
+  // sottoscrizione realtime) per riflettere anche le azioni fatte da altri utenti.
+  async function ricaricaRichieste() {
+    const [
+      { data: righeSwap, error: erroreSwap },
+      { data: righeAssenza, error: erroreAssenza },
+      { data: righePreassegnazione, error: errorePreassegnazione },
+    ] = await Promise.all([
+      supabase.from("richieste_swap").select("*").order("created_at", { ascending: true }),
+      supabase.from("richieste_assenza").select("*").order("created_at", { ascending: true }),
+      supabase.from("richieste_preassegnazione").select("*").order("created_at", { ascending: true }),
+    ]);
+    if (erroreSwap) console.error("Errore caricamento richieste swap:", erroreSwap);
+    if (erroreAssenza) console.error("Errore caricamento richieste assenza:", erroreAssenza);
+    if (errorePreassegnazione) console.error("Errore caricamento richieste pre-assegnazione:", errorePreassegnazione);
+    setRichiesteSwap((righeSwap ?? []).map(swapDaRiga));
+    setRichiesteAssenza((righeAssenza ?? []).map(assenzaDaRiga));
+    setRichiestePreassegnazione((righePreassegnazione ?? []).map(preassegnazioneDaRiga));
+  }
+
   useEffect(() => {
     if (!supabase) {
       setSessionePronta(true);
@@ -480,6 +509,7 @@ export default function PlannerTurni() {
       if (sessione?.user) {
         const profili = await ricaricaDipendenti();
         await caricaTurniEStato();
+        await ricaricaRichieste();
         const mio = profili.find((p) => p.id === sessione.user.id);
         setUtenteLoggato({ id: sessione.user.id, isAdmin: !!mio?.isAdmin, email: sessione.user.email });
       } else {
@@ -488,6 +518,9 @@ export default function PlannerTurni() {
         setTurni({});
         setStatoPerMese({});
         turniSincronizzatiRef.current = {};
+        setRichiesteSwap([]);
+        setRichiesteAssenza([]);
+        setRichiestePreassegnazione([]);
       }
       setSessionePronta(true);
     });
@@ -1047,24 +1080,30 @@ export default function PlannerTurni() {
   // e, a mese Definitivo, dell'Admin" — prima veniva applicato subito dopo l'accettazione del
   // collega, ignorando lo stato Bozza/Definitivo. Vedi src/domain/swapWorkflow.js.
 
-  function richiediSwap(empId, annoDa, meseDa, giornoDa, empDestinatarioId, annoA, meseA, giornoA) {
-    setRichiesteSwap((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        daEmpId: empId,
-        aEmpId: empDestinatarioId,
-        annoDa,
-        meseDa,
-        giornoDa,
-        annoA,
-        meseA,
-        giornoA,
-        turnoDa: turni[keyTurno(empId, annoDa, meseDa, giornoDa)]?.code || null,
-        turnoA: turni[keyTurno(empDestinatarioId, annoA, meseA, giornoA)]?.code || null,
-        stato: STATI_SWAP.IN_ATTESA_COLLEGA,
-      },
-    ]);
+  // Ogni azione su una richiesta scrive subito su Supabase e poi ricarica le tre liste:
+  // le richieste passano di mano tra utenti diversi (chi le fa, il collega, l'admin), quindi
+  // non si può tenerle in una bozza locale con un pulsante "Salva" come per il calendario —
+  // ogni passaggio deve arrivare al database prima che l'altra persona possa vederlo.
+  async function richiediSwap(empId, annoDa, meseDa, giornoDa, empDestinatarioId, annoA, meseA, giornoA) {
+    const nuovaRiga = rigaDaSwap({
+      daEmpId: empId,
+      aEmpId: empDestinatarioId,
+      annoDa,
+      meseDa,
+      giornoDa,
+      annoA,
+      meseA,
+      giornoA,
+      turnoDa: turni[keyTurno(empId, annoDa, meseDa, giornoDa)]?.code || null,
+      turnoA: turni[keyTurno(empDestinatarioId, annoA, meseA, giornoA)]?.code || null,
+      stato: STATI_SWAP.IN_ATTESA_COLLEGA,
+    });
+    const { error } = await supabase.from("richieste_swap").insert(nuovaRiga);
+    if (error) {
+      alert(`Errore nell'invio della richiesta: ${error.message}`);
+      return;
+    }
+    await ricaricaRichieste();
     const richiedente = dipendenti.find((d) => d.id === empId);
     inviaPush(empDestinatarioId, "Nuovo cambio turno", `${richiedente?.nome ?? "Un collega"} ti ha proposto un cambio turno.`);
   }
@@ -1073,13 +1112,15 @@ export default function PlannerTurni() {
   // richiesta) — applicaScambio() ricontrolla che entrambi gli slot siano ancora modificabili
   // (non DNM) e corrispondano ancora ai turni originali della richiesta, usando lo stato LIVE
   // di `turni`, non lo snapshot salvato al momento della richiesta.
-  function applicaSwapEffettivo(richiesta) {
+  async function applicaSwapEffettivo(richiesta) {
     const esito = applicaScambio(turni, richiesta, keyTurno);
     if (!esito.ok) {
       alert(esito.errore);
-      setRichiesteSwap((prev) =>
-        prev.map((r) => (r.id === richiesta.id ? { ...r, stato: STATI_SWAP.RIFIUTATA_ADMIN, notaSistema: esito.errore } : r))
-      );
+      await supabase
+        .from("richieste_swap")
+        .update(rigaDaSwap({ stato: STATI_SWAP.RIFIUTATA_ADMIN, notaSistema: esito.errore }))
+        .eq("id", richiesta.id);
+      await ricaricaRichieste();
       return;
     }
     // In un mese Definitivo "Assegna automaticamente" è già bloccato del tutto, quindi
@@ -1105,19 +1146,21 @@ export default function PlannerTurni() {
 
   // Il collega destinatario risponde: in Bozza l'accettazione applica subito, in Definitivo
   // passa in attesa dell'admin (accettaDaCollega decide in base a statoMese).
-  function rispondiSwapCollega(id, accetta) {
+  async function rispondiSwapCollega(id, accetta) {
     const richiesta = richiesteSwap.find((r) => r.id === id);
     if (!richiesta) return;
     const collega = dipendenti.find((d) => d.id === richiesta.aEmpId);
     if (!accetta) {
-      setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: rifiutaDaCollega() } : r)));
+      await supabase.from("richieste_swap").update(rigaDaSwap({ stato: rifiutaDaCollega() })).eq("id", id);
+      await ricaricaRichieste();
       inviaPush(richiesta.daEmpId, "Cambio turno rifiutato", `${collega?.nome ?? "Il collega"} ha rifiutato il cambio turno.`);
       return;
     }
     const nuovoStato = accettaDaCollega(statoMese);
-    setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato } : r)));
+    await supabase.from("richieste_swap").update(rigaDaSwap({ stato: nuovoStato })).eq("id", id);
+    await ricaricaRichieste();
     if (nuovoStato === STATI_SWAP.APPLICATA) {
-      applicaSwapEffettivo(richiesta);
+      await applicaSwapEffettivo(richiesta);
       inviaPush(richiesta.daEmpId, "Cambio turno accettato", `${collega?.nome ?? "Il collega"} ha accettato il cambio turno.`);
     } else if (nuovoStato === STATI_SWAP.IN_ATTESA_ADMIN) {
       dipendenti.filter((d) => d.isAdmin).forEach((admin) =>
@@ -1127,13 +1170,17 @@ export default function PlannerTurni() {
   }
 
   // L'admin risponde, solo quando la richiesta è in attesa sua (mese Definitivo).
-  function rispondiSwapAdmin(id, approva, motivoRifiuto) {
+  async function rispondiSwapAdmin(id, approva, motivoRifiuto) {
     const richiesta = richiesteSwap.find((r) => r.id === id);
     if (!richiesta) return;
     const nuovoStato = approva ? approvaSwapAdmin() : rifiutaSwapAdmin();
-    setRichiesteSwap((prev) => prev.map((r) => (r.id === id ? { ...r, stato: nuovoStato, motivoRifiuto: approva ? null : motivoRifiuto } : r)));
+    await supabase
+      .from("richieste_swap")
+      .update(rigaDaSwap({ stato: nuovoStato, motivoRifiuto: approva ? null : motivoRifiuto }))
+      .eq("id", id);
+    await ricaricaRichieste();
     if (nuovoStato === STATI_SWAP.APPLICATA) {
-      applicaSwapEffettivo(richiesta);
+      await applicaSwapEffettivo(richiesta);
       inviaPush(richiesta.daEmpId, "Cambio turno accettato", "L'admin ha approvato il tuo cambio turno.");
     } else {
       inviaPush(richiesta.daEmpId, "Cambio turno rifiutato", `L'admin ha rifiutato il tuo cambio turno. Motivo: ${motivoRifiuto}`);
@@ -1142,24 +1189,26 @@ export default function PlannerTurni() {
 
   // ---------- Richieste ferie/permessi ----------
 
-  function richiediAssenza(empId, giorno, annoRichiesta, meseRichiesta, tipo, turnoInteressato, dettagli) {
-    setRichiesteAssenza((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        empId,
-        giorno,
-        anno: annoRichiesta,
-        mese: meseRichiesta,
-        tipo,
-        turnoInteressato: turnoInteressato || null,
-        nota: dettagli?.nota || "",
-        ore: dettagli?.ore || null,
-        oraInizio: dettagli?.oraInizio || "",
-        oraFine: dettagli?.oraFine || "",
-        stato: "in sospeso",
-      },
-    ]);
+  async function richiediAssenza(empId, giorno, annoRichiesta, meseRichiesta, tipo, turnoInteressato, dettagli) {
+    const nuovaRiga = rigaDaAssenza({
+      empId,
+      giorno,
+      anno: annoRichiesta,
+      mese: meseRichiesta,
+      tipo,
+      turnoInteressato: turnoInteressato || null,
+      nota: dettagli?.nota || "",
+      ore: dettagli?.ore || null,
+      oraInizio: dettagli?.oraInizio || "",
+      oraFine: dettagli?.oraFine || "",
+      stato: "in sospeso",
+    });
+    const { error } = await supabase.from("richieste_assenza").insert(nuovaRiga);
+    if (error) {
+      alert(`Errore nell'invio della richiesta: ${error.message}`);
+      return;
+    }
+    await ricaricaRichieste();
     const richiedente = dipendenti.find((d) => d.id === empId);
     const tipoLabel = tipo === "F" ? "ferie" : "un permesso";
     dipendenti.filter((d) => d.isAdmin).forEach((admin) =>
@@ -1167,11 +1216,12 @@ export default function PlannerTurni() {
     );
   }
 
-  function gestisciAssenza(id, decisione, motivoRifiuto) {
-    setRichiesteAssenza((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, stato: decisione, motivoRifiuto: decisione === "approvata" ? null : motivoRifiuto } : r))
-    );
+  async function gestisciAssenza(id, decisione, motivoRifiuto) {
     const r = richiesteAssenza.find((r) => r.id === id);
+    await supabase
+      .from("richieste_assenza")
+      .update(rigaDaAssenza({ stato: decisione, motivoRifiuto: decisione === "approvata" ? null : motivoRifiuto }))
+      .eq("id", id);
     if (decisione === "approvata" && r) {
       const k = keyTurno(r.empId, r.anno, r.mese, r.giorno);
       const esito = canModifyShift(turni[k]);
@@ -1183,6 +1233,7 @@ export default function PlannerTurni() {
         sincronizzaTurnoSingolo(k, nuovoValore);
       }
     }
+    await ricaricaRichieste();
     if (r) {
       const tipoLabel = r.tipo === "F" ? "Ferie" : "Permesso";
       const corpo = decisione === "approvata" ? "La tua richiesta è stata approvata." : `La tua richiesta è stata rifiutata. Motivo: ${motivoRifiuto}`;
@@ -1208,14 +1259,25 @@ export default function PlannerTurni() {
     sincronizzaTurnoSingolo(k, nuovoValore);
   }
 
-  function richiediPreassegnazione(empId, giorno, annoRichiesta, meseRichiesta, turno, nota) {
+  async function richiediPreassegnazione(empId, giorno, annoRichiesta, meseRichiesta, turno, nota) {
     // L'admin può pre-assegnare turni (anche per altri dipendenti) senza attendere conferma:
     // la richiesta viene applicata subito ed è già "approvata".
     const statoIniziale = isAdmin ? "approvata" : "in sospeso";
-    setRichiestePreassegnazione((prev) => [
-      ...prev,
-      { id: Date.now(), empId, giorno, anno: annoRichiesta, mese: meseRichiesta, turno, nota: nota || "", stato: statoIniziale },
-    ]);
+    const nuovaRiga = rigaDaPreassegnazione({
+      empId,
+      giorno,
+      anno: annoRichiesta,
+      mese: meseRichiesta,
+      turno,
+      nota: nota || "",
+      stato: statoIniziale,
+    });
+    const { error } = await supabase.from("richieste_preassegnazione").insert(nuovaRiga);
+    if (error) {
+      alert(`Errore nell'invio della richiesta: ${error.message}`);
+      return;
+    }
+    await ricaricaRichieste();
     if (isAdmin) {
       applicaPreassegnazioneTurno(empId, giorno, annoRichiesta, meseRichiesta, turno);
     } else {
@@ -1226,14 +1288,16 @@ export default function PlannerTurni() {
     }
   }
 
-  function gestisciPreassegnazione(id, decisione, motivoRifiuto) {
-    setRichiestePreassegnazione((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, stato: decisione, motivoRifiuto: decisione === "approvata" ? null : motivoRifiuto } : r))
-    );
+  async function gestisciPreassegnazione(id, decisione, motivoRifiuto) {
     const r = richiestePreassegnazione.find((r) => r.id === id);
-    if (decisione === "approvata") {
-      if (r) applicaPreassegnazioneTurno(r.empId, r.giorno, r.anno, r.mese, r.turno);
+    await supabase
+      .from("richieste_preassegnazione")
+      .update(rigaDaPreassegnazione({ stato: decisione, motivoRifiuto: decisione === "approvata" ? null : motivoRifiuto }))
+      .eq("id", id);
+    if (decisione === "approvata" && r) {
+      applicaPreassegnazioneTurno(r.empId, r.giorno, r.anno, r.mese, r.turno);
     }
+    await ricaricaRichieste();
     if (r) {
       const corpo = decisione === "approvata" ? "La tua richiesta è stata approvata." : `La tua richiesta è stata rifiutata. Motivo: ${motivoRifiuto}`;
       inviaPush(r.empId, decisione === "approvata" ? "Pre-assegnazione approvata" : "Pre-assegnazione rifiutata", corpo);
