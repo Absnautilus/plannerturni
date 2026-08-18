@@ -95,6 +95,13 @@ const GLOBAL_STYLE = `
   .planner-turni-app ::selection {
     background: rgba(31, 111, 120, 0.2);
   }
+  @keyframes ptn-tab-in {
+    from { opacity: 0; transform: translateX(var(--ptn-tab-offset, 10px)); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .ptn-tab-content {
+    animation: ptn-tab-in 0.22s ease-out;
+  }
 `;
 
 // ---------- Design tokens ----------
@@ -378,6 +385,10 @@ export default function PlannerTurni() {
   const [notifichePushCaricamento, setNotifichePushCaricamento] = useState(false);
 
   const [tab, setTab] = useState("calendario");
+  // Direzione dell'ultimo cambio tab (1 = avanti, -1 = indietro): pilota da che lato entra
+  // il contenuto nell'animazione ptn-tab-in, sia che il cambio arrivi da uno swipe che da un
+  // click sulla pillola di navigazione — per uno swipe "più liquido" invece di un taglio netto.
+  const [direzioneTab, setDirezioneTab] = useState(1);
   const [cellaSelezionata, setCellaSelezionata] = useState(null); // { empId, giorno }
   // Su mobile la colonna "Dipendente" del calendario mostra solo l'avatar per lasciare più
   // spazio ai giorni: il nome compare solo per le righe qui dentro, toccando l'avatar per
@@ -1120,7 +1131,7 @@ export default function PlannerTurni() {
       let ferieUsate = 0;
       Object.entries(turni).forEach(([k, v]) => {
         const [empIdStr, annoStr] = k.split("_");
-        if (Number(empIdStr) === d.id && Number(annoStr) === anno && v.code === "F") {
+        if (empIdStr === d.id && Number(annoStr) === anno && v.code === "F") {
           ferieUsate += 1;
         }
       });
@@ -1679,13 +1690,13 @@ export default function PlannerTurni() {
     },
     datePickerFreccia: {
       border: "none",
-      background: hexRgba(COLORI.ottone, 0.12),
+      background: COLORI.mist,
       borderRadius: "50%",
       width: "26px",
       height: "26px",
       cursor: "pointer",
       fontSize: "14px",
-      color: COLORI.ottoneScuro,
+      color: COLORI.ink,
       lineHeight: 1,
     },
     datePickerMeseAnno: {
@@ -1706,8 +1717,8 @@ export default function PlannerTurni() {
     },
     datePickerAnnoBtn: (attivo) => ({
       border: "none",
-      background: attivo ? COLORI.teal : hexRgba(COLORI.ottone, 0.12),
-      color: attivo ? "white" : COLORI.ottoneScuro,
+      background: attivo ? COLORI.teal : COLORI.mist,
+      color: attivo ? "white" : COLORI.ink,
       borderRadius: "8px",
       padding: "6px 10px",
       fontSize: "12px",
@@ -1835,11 +1846,13 @@ export default function PlannerTurni() {
       transition: "left 0.15s ease",
       boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
     }),
-    // Niente cursor: pointer qui (né sotto in buttonSecondary): un valore fisso inline
-    // vincerebbe sempre sulla regola CSS button:disabled { cursor: not-allowed } di
-    // GLOBAL_STYLE, mostrando la manina anche sui pulsanti disabilitati.
+    // Niente cursor: pointer qui: un valore fisso inline vincerebbe sempre sulla regola CSS
+    // button:disabled { cursor: default } di GLOBAL_STYLE.
+    // Il pulsante primario è viola pieno (il viola del logo, COLORI.ottone): è l'azione
+    // "pronta a partire" (Invia richiesta, Salva, Entra...) — quando è disabled si smorza
+    // da solo via opacity (GLOBAL_STYLE), quindi resta comunque chiaro quando NON è pronto.
     button: {
-      background: COLORI.teal,
+      background: COLORI.ottone,
       color: "white",
       border: "none",
       padding: "10px 20px",
@@ -1848,13 +1861,10 @@ export default function PlannerTurni() {
       fontSize: "13px",
       fontFamily: "inherit",
     },
-    // Il viola è lo stesso del logo (COLORI.ottone): un pulsante cliccabile non deve mai
-    // sembrare grigio/disattivato — il grigio (opacity via :disabled in GLOBAL_STYLE) resta
-    // riservato solo a chi ha davvero l'attributo disabled.
     buttonSecondary: {
-      background: hexRgba(COLORI.ottone, 0.12),
-      color: COLORI.ottoneScuro,
-      border: `1px solid ${hexRgba(COLORI.ottone, 0.25)}`,
+      background: COLORI.mist,
+      color: COLORI.ink,
+      border: "none",
       padding: "9px 18px",
       borderRadius: "10px",
       fontWeight: 600,
@@ -1925,8 +1935,8 @@ export default function PlannerTurni() {
       lineHeight: 1.4,
     },
     navFreccia: {
-      background: hexRgba(COLORI.ottone, 0.12),
-      color: COLORI.ottoneScuro,
+      background: COLORI.mist,
+      color: COLORI.ink,
       border: "none",
       width: "36px",
       height: "36px",
@@ -2093,7 +2103,7 @@ export default function PlannerTurni() {
                 <button
                   type="button"
                   onClick={() => { setModalitaRecupero(true); setEmailRecupero(loginEmail); }}
-                  style={{ border: "none", background: "transparent", color: COLORI.ottoneScuro, fontSize: "12px", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                  style={{ border: "none", background: "transparent", color: COLORI.tealScuro, fontSize: "12px", cursor: "pointer", padding: 0, textDecoration: "underline" }}
                 >
                   PIN dimenticato?
                 </button>
@@ -2149,6 +2159,18 @@ export default function PlannerTurni() {
     { id: "preassegnazioni", label: "Pre-assegnazioni" },
   ];
 
+  // Cambia tab ricordando la direzione (avanti/indietro nell'elenco vociNav): usata sia dal
+  // click sulle pillole che dallo swipe, così il contenuto nuovo entra sempre dal lato
+  // "giusto" (ptn-tab-in in GLOBAL_STYLE) invece di un taglio netto.
+  function cambiaTab(nuovoTab) {
+    const indiceAttuale = vociNav.findIndex((v) => v.id === tab);
+    const indiceNuovo = vociNav.findIndex((v) => v.id === nuovoTab);
+    if (indiceAttuale !== -1 && indiceNuovo !== -1) {
+      setDirezioneTab(indiceNuovo >= indiceAttuale ? 1 : -1);
+    }
+    setTab(nuovoTab);
+  }
+
   // Swipe orizzontale per cambiare tab: ignora il gesto se parte da dentro un elemento che
   // scorre a sua volta in orizzontale (es. la tabella del calendario), altrimenti uno scroll
   // laterale nella tabella cambierebbe tab invece di scorrere la tabella.
@@ -2173,7 +2195,7 @@ export default function PlannerTurni() {
     if (indiceAttuale === -1) return;
     const prossimoIndice = deltaX < 0 ? indiceAttuale + 1 : indiceAttuale - 1;
     if (prossimoIndice < 0 || prossimoIndice >= vociNav.length) return;
-    setTab(vociNav[prossimoIndice].id);
+    cambiaTab(vociNav[prossimoIndice].id);
   }
 
   return (
@@ -2364,12 +2386,18 @@ export default function PlannerTurni() {
       <div style={styles.navWrapper}>
         <div className="ptn-nav-scroll" style={styles.nav}>
           {vociNav.map((v) => (
-            <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => setTab(v.id)}>{v.label}</button>
+            <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => cambiaTab(v.id)}>{v.label}</button>
           ))}
         </div>
       </div>
 
-      <div style={styles.container} onTouchStart={alTouchStartContenuto} onTouchEnd={alTouchEndContenuto}>
+      <div
+        key={tab}
+        className="ptn-tab-content"
+        style={{ ...styles.container, "--ptn-tab-offset": direzioneTab > 0 ? "14px" : "-14px" }}
+        onTouchStart={alTouchStartContenuto}
+        onTouchEnd={alTouchEndContenuto}
+      >
         {tab === "calendario" && (
           <>
             <div style={styles.card}>
@@ -2595,7 +2623,7 @@ export default function PlannerTurni() {
                       return acc;
                     }, {})
                   ).map(([empId, elenco]) => {
-                    const emp = dipendenti.find((d) => d.id === Number(empId));
+                    const emp = dipendenti.find((d) => d.id === empId);
                     return (
                       <div key={empId} style={{ marginBottom: "12px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
@@ -2851,14 +2879,14 @@ export default function PlannerTurni() {
                       <span style={{ fontSize: "11px", fontWeight: 700, color: COLORI.muted, width: "18px", flexShrink: 0 }}>{indice + 1}°</span>
                       <span style={{ fontSize: "13px", lineHeight: 1.6, color: COLORI.ink, flex: 1 }}>{TESTI_REGOLA_PREFERENZA[chiave]}</span>
                       <button
-                        style={{ border: "none", background: hexRgba(COLORI.ottone, 0.12), color: COLORI.ottoneScuro, borderRadius: "6px", width: "24px", height: "24px", marginRight: "4px" }}
+                        style={{ border: "none", background: COLORI.mist, borderRadius: "6px", width: "24px", height: "24px", marginRight: "4px" }}
                         onClick={() => spostaRegolaPreferenza(chiave, -1)}
                         disabled={indice === 0}
                       >
                         ↑
                       </button>
                       <button
-                        style={{ border: "none", background: hexRgba(COLORI.ottone, 0.12), color: COLORI.ottoneScuro, borderRadius: "6px", width: "24px", height: "24px", marginRight: "10px" }}
+                        style={{ border: "none", background: COLORI.mist, borderRadius: "6px", width: "24px", height: "24px", marginRight: "10px" }}
                         onClick={() => spostaRegolaPreferenza(chiave, 1)}
                         disabled={indice === ordineRegolePreferenza.length - 1}
                       >
@@ -3213,7 +3241,7 @@ function RichiediSwapForm({ empCorrente, dipendenti, annoCorrente, meseCorrente,
   const ieri = giornoPrecedente(anno, mese, giornoSicuro);
   const mioTurnoIeri = turni[keyTurno(empCorrente.id, ieri.anno, ieri.mese, ieri.giorno)];
 
-  const turnoCollega = collega ? turni[keyTurno(Number(collega), anno, mese, giornoSicuro)] : null;
+  const turnoCollega = collega ? turni[keyTurno(collega, anno, mese, giornoSicuro)] : null;
 
   // quante volte ciascun collega ha accettato/rifiutato una richiesta di cambio ricevuta finora
   // (conta "applicata" come accettata: è l'esito finale positivo, sia in Bozza che dopo
@@ -3284,7 +3312,7 @@ function RichiediSwapForm({ empCorrente, dipendenti, annoCorrente, meseCorrente,
         style={{ ...styles.button, marginTop: "10px" }}
         disabled={!collega || !mioTurno || !turnoCollega || mioTurno?.dnm || turnoCollega?.dnm}
         onClick={() => {
-          onRichiedi(empCorrente.id, anno, mese, giornoSicuro, Number(collega), anno, mese, giornoSicuro);
+          onRichiedi(empCorrente.id, anno, mese, giornoSicuro, collega, anno, mese, giornoSicuro);
           setCollega("");
         }}
       >
@@ -3415,7 +3443,7 @@ function RichiediPreassegnazioneForm({ empCorrente, dipendenti, isAdmin, annoCor
   const [turno, setTurno] = useState("");
   const [nota, setNota] = useState("");
 
-  const empTarget = isAdmin ? (dipendenti.find((d) => d.id === Number(empSelezionatoId)) || empCorrente) : empCorrente;
+  const empTarget = isAdmin ? (dipendenti.find((d) => d.id === empSelezionatoId) || empCorrente) : empCorrente;
   // L'admin può pre-assegnare qualunque tipologia di turno, non solo quelle "proprie"
   // del ruolo del dipendente (es. dare una Direzione a un diurno per un giorno) — chi
   // non è admin resta invece limitato ai turni ammessi per il proprio ruolo.
