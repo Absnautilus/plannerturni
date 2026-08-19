@@ -96,13 +96,6 @@ const GLOBAL_STYLE = `
   .planner-turni-app ::selection {
     background: rgba(31, 111, 120, 0.2);
   }
-  @keyframes ptn-tab-in {
-    from { opacity: 0; transform: translateX(var(--ptn-tab-offset, 10px)); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  .ptn-tab-content {
-    animation: ptn-tab-in 0.38s cubic-bezier(0.22, 1, 0.36, 1);
-  }
 `;
 
 // ---------- Design tokens ----------
@@ -386,10 +379,14 @@ export default function PlannerTurni() {
   const [notifichePushCaricamento, setNotifichePushCaricamento] = useState(false);
 
   const [tab, setTab] = useState("calendario");
-  // Direzione dell'ultimo cambio tab (1 = avanti, -1 = indietro): pilota da che lato entra
-  // il contenuto nell'animazione ptn-tab-in, sia che il cambio arrivi da uno swipe che da un
-  // click sulla pillola di navigazione — per uno swipe "più liquido" invece di un taglio netto.
+  // Direzione dell'ultimo cambio tab (1 = avanti, -1 = indietro) e stato della transizione
+  // "entrando": pilotano uno slide su contenuto e navbar via transform + transition JS-driven
+  // (tecnica FLIP a doppio requestAnimationFrame), non un @keyframes CSS — un'animazione CSS
+  // legata al remount (key) si è rivelata inaffidabile su Safari iOS quando l'elemento ha
+  // anche overflow-x/scroll, quindi qui si pilota lo stato "a mano" per un risultato garantito
+  // su tutti i browser.
   const [direzioneTab, setDirezioneTab] = useState(1);
+  const [transizioneTabAttiva, setTransizioneTabAttiva] = useState(false);
   const [cellaSelezionata, setCellaSelezionata] = useState(null); // { empId, giorno }
   // Su mobile la colonna "Dipendente" del calendario mostra solo l'avatar per lasciare più
   // spazio ai giorni: il nome compare solo per le righe qui dentro, toccando l'avatar per
@@ -2178,12 +2175,43 @@ export default function PlannerTurni() {
   // click sulle pillole che dallo swipe, così il contenuto nuovo entra sempre dal lato
   // "giusto" (ptn-tab-in in GLOBAL_STYLE) invece di un taglio netto.
   function cambiaTab(nuovoTab) {
+    if (nuovoTab === tab) return;
     const indiceAttuale = vociNav.findIndex((v) => v.id === tab);
     const indiceNuovo = vociNav.findIndex((v) => v.id === nuovoTab);
     if (indiceAttuale !== -1 && indiceNuovo !== -1) {
       setDirezioneTab(indiceNuovo >= indiceAttuale ? 1 : -1);
     }
+    // "Entrando" parte true nello STESSO render in cui cambia tab: il contenuto nuovo si
+    // dipinge subito nella posizione di partenza (spostato, trasparente, senza transition).
+    // L'effetto qui sotto, dopo due requestAnimationFrame, lo riporta a posto CON transition:
+    // il doppio rAF garantisce che il browser abbia già dipinto la posizione di partenza
+    // prima di far partire l'animazione verso quella finale (altrimenti i due stili possono
+    // finire nello stesso frame e non si vede alcuno spostamento).
+    setTransizioneTabAttiva(true);
     setTab(nuovoTab);
+  }
+
+  useEffect(() => {
+    if (!transizioneTabAttiva) return;
+    let raf2;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setTransizioneTabAttiva(false));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [transizioneTabAttiva, tab]);
+
+  // Stile della transizione slide di contenuto/navbar al cambio tab: stessa logica per
+  // entrambi, così restano sempre sincronizzati.
+  function stileTransizioneTab() {
+    const offset = direzioneTab > 0 ? "36px" : "-36px";
+    return {
+      transform: transizioneTabAttiva ? `translateX(${offset})` : "translateX(0)",
+      opacity: transizioneTabAttiva ? 0 : 1,
+      transition: transizioneTabAttiva ? "none" : "transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease",
+    };
   }
 
   // Swipe orizzontale per cambiare tab: ignora il gesto se parte da dentro un elemento che
@@ -2405,11 +2433,7 @@ export default function PlannerTurni() {
 
       <div style={styles.navWrapper}>
         <div className="ptn-nav-scroll" style={styles.nav}>
-          <div
-            key={tab}
-            className="ptn-tab-content"
-            style={{ display: "flex", gap: "2px", "--ptn-tab-offset": direzioneTab > 0 ? "36px" : "-36px" }}
-          >
+          <div style={{ display: "flex", gap: "2px", ...stileTransizioneTab() }}>
             {vociNav.map((v) => (
               <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => cambiaTab(v.id)}>{v.label}</button>
             ))}
@@ -2418,9 +2442,7 @@ export default function PlannerTurni() {
       </div>
 
       <div
-        key={tab}
-        className="ptn-tab-content"
-        style={{ ...styles.container, "--ptn-tab-offset": direzioneTab > 0 ? "36px" : "-36px" }}
+        style={{ ...styles.container, ...stileTransizioneTab() }}
         onTouchStart={alTouchStartContenuto}
         onTouchEnd={alTouchEndContenuto}
       >
