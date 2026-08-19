@@ -31,8 +31,12 @@ function weekdayDaGiorniEpoch(giorniEpoch) {
 // Genera, camminando in avanti dall'epoch, gli eventi di riposo (ciascuno una coppia di
 // giorniEpoch [inizio, fine] o un singolo [giorno]) per un dato giorno-della-settimana di
 // partenza, fino a superare `finoAGiornoEpoch`. Ogni evento parte esattamente 7 giorni dopo
-// l'inizio del precedente; ogni 4° evento (dopo 3 coppie) è un giorno singolo sul nuovo
-// weekday (ruotato indietro di 1), poi si ricomincia con le coppie.
+// l'inizio del precedente (mantenendo sempre 5 giorni lavorativi tra un riposo e l'altro);
+// ogni 4° evento (dopo 3 coppie) è un giorno singolo, sullo STESSO weekday delle coppie che
+// lo precedono (non su quello nuovo: altrimenti si perderebbe la cadenza dei 5 lavorativi e
+// si genererebbe una striscia di lavoro anomala). Il weekday si sposta indietro di 1 SOLO nel
+// gap verso il blocco successivo, che perciò dura 6 giorni invece di 7 — è esattamente questo
+// giorno "in meno" a far scalare indietro la rotazione settimanale.
 function generaEventiRiposo(weekdayIniziale, finoAGiornoEpoch) {
   const eventi = [];
   let weekdayCorrente = ((weekdayIniziale % 7) + 7) % 7;
@@ -44,14 +48,10 @@ function generaEventiRiposo(weekdayIniziale, finoAGiornoEpoch) {
       contatoreCoppie++;
       inizio += 7;
     } else {
+      eventi.push([inizio]); // singolo, ancora sul weekday corrente (quello delle 3 coppie appena fatte)
       weekdayCorrente = ((weekdayCorrente - 1) % 7 + 7) % 7;
-      // il singolo cade nella stessa posizione settimanale in cui sarebbe caduta la 4a
-      // coppia, ma sul nuovo weekday: prima occorrenza del nuovo weekday da lì in poi.
-      let candidato = inizio;
-      while (weekdayDaGiorniEpoch(candidato) !== weekdayCorrente) candidato++;
-      eventi.push([candidato]);
+      inizio += 6; // il blocco successivo parte 6 giorni dopo, già sul nuovo weekday
       contatoreCoppie = 0;
-      inizio = candidato + 7;
     }
   }
   return eventi;

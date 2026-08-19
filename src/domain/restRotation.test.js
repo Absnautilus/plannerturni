@@ -22,35 +22,45 @@ function gruppiDiRiposoContinui(dipendente, dataInizio, dataFine, agganciaTurnan
 }
 
 describe("regola confermata: coppia, coppia, coppia, singolo (poi ruota e ricomincia)", () => {
-  it("su un intervallo lungo, il ciclo delle lunghezze dei gruppi di riposo è 2,2,2,1 ripetuto", () => {
+  // Nota: l'inizio/fine della finestra di simulazione cade in un punto arbitrario del ciclo
+  // reale (che parte dall'epoch, gennaio 2020), quindi la FASE del pattern osservato nella
+  // finestra è imprevedibile (può iniziare da una coppia o direttamente da un singolo). Per
+  // questo le asserzioni sotto non assumono una fase fissa: verificano solo che (a) ogni
+  // gruppo sia lungo 1 o 2, (b) i singoli siano sempre separati da esattamente 3 coppie.
+  it("su un intervallo lungo, ogni gruppo di riposo è una coppia o un singolo, e i singoli sono separati da esattamente 3 coppie", () => {
     const inizio = new Date(Date.UTC(2026, 6, 1));
     const fine = new Date(Date.UTC(2028, 6, 1));
     for (let slot = 0; slot < 8; slot++) {
       const dipendente = { id: "x", tipo: "diurno", riposoTipo: "rotante", rotationSlot: slot };
       const gruppi = gruppiDiRiposoContinui(dipendente, inizio, fine);
-      // scarta il primo/ultimo gruppo: possono essere tagliati dal bordo della finestra di
-      // simulazione (non fanno parte del ciclo, sono solo un artefatto della simulazione)
+      // scarta il primo/ultimo gruppo: la finestra può tagliarli a metà (es. mostrare solo il
+      // secondo giorno di una coppia che inizia prima della finestra), quindi non sono
+      // affidabili — tutti i gruppi INTERNI invece sono sempre completi e genuini.
       const lunghezze = gruppi.slice(1, -1).map((g) => g.length);
       lunghezze.forEach((lung, i) => {
-        const atteso = (i % 4 === 3) ? 1 : 2;
-        expect(lung, `slot ${slot}, evento ${i}: atteso ${atteso}, trovato ${lung}`).toBe(atteso);
+        expect([1, 2], `slot ${slot}, evento ${i}: lunghezza ${lung} non valida`).toContain(lung);
       });
-      // verifica che il ciclo emerga davvero (almeno un paio di cicli completi nella finestra)
+      const indiciSingoli = lunghezze.map((l, i) => (l === 1 ? i : -1)).filter((i) => i !== -1);
+      expect(indiciSingoli.length, `slot ${slot}: nessun singolo trovato nella finestra`).toBeGreaterThan(1);
+      for (let k = 1; k < indiciSingoli.length; k++) {
+        const distanza = indiciSingoli[k] - indiciSingoli[k - 1];
+        expect(distanza, `slot ${slot}: due singoli consecutivi a distanza ${distanza} invece di 4 (3 coppie)`).toBe(4);
+      }
       expect(lunghezze.length).toBeGreaterThan(8);
     }
   });
 
-  it("il riposo isolato (singolo) compare esattamente ogni 3 coppie", () => {
+  it("tra la fine di una coppia e il riposo singolo successivo (o la coppia successiva) ci sono sempre esattamente 5 giorni lavorativi", () => {
     const dipendente = { id: "x", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 2 };
     const inizio = new Date(Date.UTC(2026, 6, 1));
     const fine = new Date(Date.UTC(2027, 6, 1));
     const gruppi = gruppiDiRiposoContinui(dipendente, inizio, fine).slice(1, -1);
-    const indiciSingoli = gruppi.map((g, i) => (g.length === 1 ? i : -1)).filter((i) => i !== -1);
-    // ogni indice singolo deve essere preceduto da esattamente 3 coppie dall'ultimo singolo
-    // (o dall'inizio): cioè gli indici dei singoli devono cadere ogni 4 posizioni (3,7,11,...)
-    indiciSingoli.forEach((idx) => {
-      expect(idx % 4).toBe(3);
-    });
+    for (let i = 1; i < gruppi.length; i++) {
+      const fineGruppoPrecedente = gruppi[i - 1][gruppi[i - 1].length - 1];
+      const inizioGruppoCorrente = gruppi[i][0];
+      const giorniLavorativi = inizioGruppoCorrente - fineGruppoPrecedente - 1;
+      expect(giorniLavorativi, `tra il gruppo ${i - 1} e il gruppo ${i}`).toBe(5);
+    }
   });
 });
 
