@@ -593,6 +593,23 @@ export default function PlannerTurni() {
   // sotto: dichiarato qui, prima di ogni return anticipato, per non violare le Rules of Hooks.
   const touchInizioRef = useRef(null);
 
+  // Doppio requestAnimationFrame per la transizione slide di cambiaTab() più sotto: anche
+  // questo effetto deve stare qui, PRIMA di ogni return anticipato (stessa ragione di
+  // touchInizioRef sopra) — un hook dichiarato dopo un return condizionale fa scattare
+  // "Rendered more hooks than during the previous render" appena si passa da non loggato a
+  // loggato (o viceversa), con schermata bianca.
+  useEffect(() => {
+    if (!transizioneTabAttiva) return;
+    let raf2;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setTransizioneTabAttiva(false));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [transizioneTabAttiva, tab]);
+
   // Aggiorna in background dipendenti, turni/stato mese e richieste: così due persone che
   // usano l'app nello stesso momento si vedono i cambiamenti a vicenda senza dover ricaricare
   // la pagina a mano. Non tocca MAI una modifica non ancora salvata: salta `turni` se ci sono
@@ -2190,18 +2207,6 @@ export default function PlannerTurni() {
     setTransizioneTabAttiva(true);
     setTab(nuovoTab);
   }
-
-  useEffect(() => {
-    if (!transizioneTabAttiva) return;
-    let raf2;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setTransizioneTabAttiva(false));
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      if (raf2) cancelAnimationFrame(raf2);
-    };
-  }, [transizioneTabAttiva, tab]);
 
   // Stile della transizione slide di contenuto/navbar al cambio tab: stessa logica per
   // entrambi, così restano sempre sincronizzati.
