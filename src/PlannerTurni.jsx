@@ -59,6 +59,7 @@ const GLOBAL_STYLE = `
     display: none;
   }
   .planner-turni-app button:not(:disabled) {
+    cursor: pointer;
     transition: filter 0.12s ease, transform 0.05s ease;
   }
   .planner-turni-app button:not(:disabled):hover {
@@ -100,7 +101,7 @@ const GLOBAL_STYLE = `
     to { opacity: 1; transform: translateX(0); }
   }
   .ptn-tab-content {
-    animation: ptn-tab-in 0.22s ease-out;
+    animation: ptn-tab-in 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   }
 `;
 
@@ -840,7 +841,18 @@ export default function PlannerTurni() {
 
   async function attivaNotifichePush() {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setMessaggioAccount("Questo browser non supporta le notifiche push.");
+      // Su iPhone/iPad, Safari espone le notifiche push SOLO alle app aggiunte alla
+      // schermata Home (modalità standalone) — in una scheda Safari normale l'API
+      // PushManager non esiste proprio, da qui il messaggio generico "non supportato".
+      // Diamo un'indicazione concreta invece di lasciar credere che sia un limite del
+      // dispositivo senza soluzione.
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+      if (isIOS && !isStandalone) {
+        setMessaggioAccount("Su iPhone/iPad le notifiche funzionano solo se aggiungi Planner Turni alla schermata Home: tocca Condividi (il riquadro con la freccia) e poi \"Aggiungi a Home\", quindi riapri l'app da lì.");
+      } else {
+        setMessaggioAccount("Questo browser non supporta le notifiche push.");
+      }
       return;
     }
     if (!import.meta.env.VITE_VAPID_PUBLIC_KEY) {
@@ -1547,6 +1559,7 @@ export default function PlannerTurni() {
       letterSpacing: "0.01em",
       whiteSpace: "nowrap",
       flexShrink: 0,
+      transition: "background 0.28s cubic-bezier(0.22, 1, 0.36, 1), color 0.28s ease",
     }),
     container: { padding: isMobile ? "0 14px 28px" : "0 28px 40px", maxWidth: "1180px", margin: "0 auto" },
     card: {
@@ -2203,7 +2216,14 @@ export default function PlannerTurni() {
       <style>{GLOBAL_STYLE}</style>
       <div style={styles.header}>
         <div style={styles.logoRow}>
-          <img src={logoIcona} alt="Planner Turni" style={{ width: isMobile ? "34px" : "44px", height: isMobile ? "34px" : "44px", flexShrink: 0 }} />
+          <button
+            type="button"
+            onClick={() => cambiaTab("calendario")}
+            title="Vai al Calendario"
+            style={{ border: "none", background: "none", padding: 0, borderRadius: "50%", display: "flex", flexShrink: 0 }}
+          >
+            <img src={logoIcona} alt="Planner Turni" style={{ width: isMobile ? "34px" : "44px", height: isMobile ? "34px" : "44px", flexShrink: 0 }} />
+          </button>
           {!isMobile && (
             <div>
               <h1 style={styles.title}>Ciao, {empCorrente?.nome?.split(" ")[0]}</h1>
@@ -2212,65 +2232,6 @@ export default function PlannerTurni() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px" }}>
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setMenuAvatarAperto((prev) => !prev)}
-              title={`${empCorrente?.cognome} ${empCorrente?.nome}${isAdmin ? " · Admin" : ""}`}
-              style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "50%",
-                background: empCorrente?.colore,
-                color: testoContrastante(empCorrente?.colore || "#000000"),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                fontSize: "13px",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                fontFamily: "inherit",
-              }}
-            >
-              {empCorrente?.nome?.[0]}{empCorrente?.cognome?.[0]}
-            </button>
-            {menuAvatarAperto && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(20,21,35,0.45)" }} onClick={() => setMenuAvatarAperto(false)} />
-                <div style={styles.pannelloNotifiche(isMobile)}>
-                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 8px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                    {empCorrente?.nome} {empCorrente?.cognome}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setMenuAvatarAperto(false); handleLogout(); }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      width: "100%",
-                      padding: "9px 8px",
-                      background: "none",
-                      border: "none",
-                      borderRadius: "10px",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      color: COLORI.ink,
-                      textAlign: "left",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    <IconEsci dimensione={16} colore={COLORI.muted} />
-                    Esci
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
           <div style={{ position: "relative" }}>
             <button
               type="button"
@@ -2380,6 +2341,63 @@ export default function PlannerTurni() {
               </>
             )}
           </div>
+
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setMenuAvatarAperto((prev) => !prev)}
+              title={`${empCorrente?.cognome} ${empCorrente?.nome}${isAdmin ? " · Admin" : ""}`}
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "50%",
+                background: empCorrente?.colore,
+                color: testoContrastante(empCorrente?.colore || "#000000"),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: "13px",
+                border: "none",
+                padding: 0,
+                fontFamily: "inherit",
+              }}
+            >
+              {empCorrente?.nome?.[0]}{empCorrente?.cognome?.[0]}
+            </button>
+            {menuAvatarAperto && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(20,21,35,0.45)" }} onClick={() => setMenuAvatarAperto(false)} />
+                <div style={{ ...styles.pannelloNotifiche(isMobile), width: "180px" }}>
+                  <div style={{ fontSize: "11.5px", fontWeight: 700, color: COLORI.muted, padding: "4px 8px 8px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    {empCorrente?.nome} {empCorrente?.cognome}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setMenuAvatarAperto(false); handleLogout(); }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "7px",
+                      width: "auto",
+                      padding: "6px 8px",
+                      background: "none",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: COLORI.ink,
+                      textAlign: "left",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <IconEsci dimensione={16} colore={COLORI.muted} />
+                    Esci
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2394,7 +2412,7 @@ export default function PlannerTurni() {
       <div
         key={tab}
         className="ptn-tab-content"
-        style={{ ...styles.container, "--ptn-tab-offset": direzioneTab > 0 ? "14px" : "-14px" }}
+        style={{ ...styles.container, "--ptn-tab-offset": direzioneTab > 0 ? "36px" : "-36px" }}
         onTouchStart={alTouchStartContenuto}
         onTouchEnd={alTouchEndContenuto}
       >
@@ -2465,7 +2483,7 @@ export default function PlannerTurni() {
                 Lo stato Bozza/Definitivo riguarda solo {nomeMese}: ogni mese ha il proprio stato indipendente. "Assegna automaticamente" genera i turni solo per {nomeMese}: gli altri mesi non vengono toccati. Ogni click riparte da zero (i turni bloccati con 🔒 restano fissi, il resto viene ricalcolato e può variare). "Imposta riposi mesi successivi" pre-compila solo i giorni di riposo (non i turni di copertura) per i 12 mesi dopo quello visualizzato, applicando la stessa regola di rotazione — utile per fissare in anticipo i weekend/riposi anche se i turni veri e propri verranno assegnati più avanti. Le assegnazioni sul calendario restano solo su questo dispositivo finché non premi "Salva turni": solo allora diventano visibili a tutta la squadra.
               </p>
 
-              {conflitti.length > 0 && (
+              {isAdmin && conflitti.length > 0 && (
                 <div style={styles.avviso}>
                   <strong style={styles.avvisoTitolo}>Conflitti nell'assegnazione automatica</strong>
                   <ul style={{ fontSize: "12px", margin: "8px 0 0 18px", color: COLORI.ink }}>
