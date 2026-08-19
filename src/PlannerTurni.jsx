@@ -607,11 +607,16 @@ export default function PlannerTurni() {
     if (!bottone || !contenitore) return;
     const rBottone = bottone.getBoundingClientRect();
     const rContenitore = contenitore.getBoundingClientRect();
-    setNavHighlight({
-      left: rBottone.left - rContenitore.left + contenitore.scrollLeft,
-      width: rBottone.width,
-      pronto: true,
-    });
+    const leftRelativo = rBottone.left - rContenitore.left + contenitore.scrollLeft;
+    setNavHighlight({ left: leftRelativo, width: rBottone.width, pronto: true });
+    // La navbar scrolla in orizzontale quando le voci non ci stanno tutte (soprattutto su
+    // mobile): non basta far scivolare l'indicatore, va portata in vista anche la voce
+    // stessa se il tab attivo cambia fuori dall'area visibile (es. arrivando a "Ferie e
+    // permessi" da uno swipe mentre la barra era scrollata su "Dipendenti").
+    const scrollMassimo = contenitore.scrollWidth - contenitore.clientWidth;
+    const scrollCentrato = leftRelativo - (contenitore.clientWidth - rBottone.width) / 2;
+    const scrollTarget = Math.max(0, Math.min(scrollMassimo, scrollCentrato));
+    contenitore.scrollTo({ left: scrollTarget, behavior: "smooth" });
   }, [tab, isMobile]);
 
   // Doppio requestAnimationFrame per la transizione slide di cambiaTab() più sotto: anche
