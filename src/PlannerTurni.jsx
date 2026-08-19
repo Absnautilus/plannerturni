@@ -617,7 +617,14 @@ export default function PlannerTurni() {
     const scrollCentrato = leftRelativo - (contenitore.clientWidth - rBottone.width) / 2;
     const scrollTarget = Math.max(0, Math.min(scrollMassimo, scrollCentrato));
     contenitore.scrollTo({ left: scrollTarget, behavior: "smooth" });
-  }, [tab, isMobile]);
+  // utenteLoggato in dipendenza (non solo tab/isMobile): questo componente non smonta al
+  // login, resta lo stesso — se `tab` è già "calendario" da PRIMA del login (il valore di
+  // default), il suo cambiamento non fa scattare l'effetto quando la navbar vera e propria
+  // compare per la prima volta, lasciando l'indicatore invisibile finché non si cambia tab
+  // manualmente almeno una volta. `dipendenti` (da cui dipende empCorrente, l'ultimo gate
+  // prima che la navbar compaia) è già popolato quando utenteLoggato viene impostato: vedi
+  // l'effetto di autenticazione, che chiama ricaricaDipendenti() prima di setUtenteLoggato.
+  }, [tab, isMobile, utenteLoggato]);
 
   // Doppio requestAnimationFrame per la transizione slide di cambiaTab() più sotto: anche
   // questo effetto deve stare qui, PRIMA di ogni return anticipato (stessa ragione di
