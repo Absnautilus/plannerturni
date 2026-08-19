@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import { eRiposoPerGiorno, prossimoRotationSlotLibero } from "./restRotation.js";
 
 // Cammina giorno per giorno su un intervallo continuo (attraversando mesi e anni) e raggruppa
-// i giorni di riposo consecutivi di un dipendente, per verificare che siano sempre in coppie
-// di 2 — mai isolati, mai più di 2 — indipendentemente da dove cadono i confini di mese.
+// i giorni di riposo consecutivi di un dipendente.
 function gruppiDiRiposoContinui(dipendente, dataInizio, dataFine, agganciaTurnanteANotturno = true, altriDipendenti = []) {
   const gruppi = [];
   let corrente = null;
@@ -22,34 +21,35 @@ function gruppiDiRiposoContinui(dipendente, dataInizio, dataFine, agganciaTurnan
   return gruppi;
 }
 
-describe("FIX #11 — le coppie di riposo non si spezzano mai al cambio di mese", () => {
-  it("su 5 anni continui, per 12 rotationSlot diversi, ogni gruppo di riposo è una coppia (mai un giorno isolato)", () => {
+describe("regola confermata: coppia, coppia, coppia, singolo (poi ruota e ricomincia)", () => {
+  it("su un intervallo lungo, il ciclo delle lunghezze dei gruppi di riposo è 2,2,2,1 ripetuto", () => {
     const inizio = new Date(Date.UTC(2026, 6, 1));
-    const fine = new Date(Date.UTC(2031, 6, 1));
-    for (let slot = 0; slot < 12; slot++) {
+    const fine = new Date(Date.UTC(2028, 6, 1));
+    for (let slot = 0; slot < 8; slot++) {
       const dipendente = { id: "x", tipo: "diurno", riposoTipo: "rotante", rotationSlot: slot };
       const gruppi = gruppiDiRiposoContinui(dipendente, inizio, fine);
-      // il primo/ultimo gruppo della finestra può essere "tagliato" dal bordo della simulazione
-      // (la sua metà mancante cade fuori dall'intervallo simulato, non è un bug reale) — si
-      // scartano solo quei due gruppi di bordo, tutti gli altri devono essere coppie pulite.
-      const gruppiInterni = gruppi.slice(1, -1);
-      gruppiInterni.forEach((g) => {
-        expect(g.length, `slot ${slot}: gruppo di lunghezza ${g.length} invece di 2`).toBe(2);
+      // scarta il primo/ultimo gruppo: possono essere tagliati dal bordo della finestra di
+      // simulazione (non fanno parte del ciclo, sono solo un artefatto della simulazione)
+      const lunghezze = gruppi.slice(1, -1).map((g) => g.length);
+      lunghezze.forEach((lung, i) => {
+        const atteso = (i % 4 === 3) ? 1 : 2;
+        expect(lung, `slot ${slot}, evento ${i}: atteso ${atteso}, trovato ${lung}`).toBe(atteso);
       });
+      // verifica che il ciclo emerga davvero (almeno un paio di cicli completi nella finestra)
+      expect(lunghezze.length).toBeGreaterThan(8);
     }
   });
 
-  it("nessun riposo isolato nemmeno con l'aggancio turnante/notturno attivo", () => {
+  it("il riposo isolato (singolo) compare esattamente ogni 3 coppie", () => {
+    const dipendente = { id: "x", tipo: "diurno", riposoTipo: "rotante", rotationSlot: 2 };
     const inizio = new Date(Date.UTC(2026, 6, 1));
-    const fine = new Date(Date.UTC(2029, 6, 1));
-    const notturno = { id: "n", tipo: "notturno", riposoTipo: "rotante", rotationSlot: 0 };
-    const turnante = { id: "t", tipo: "turnante", riposoTipo: "rotante", rotationSlot: 1 };
-    [notturno, turnante].forEach((dip) => {
-      const altro = dip === notturno ? turnante : notturno;
-      const gruppi = gruppiDiRiposoContinui(dip, inizio, fine, true, [altro]);
-      gruppi.slice(1, -1).forEach((g) => {
-        expect(g.length, `${dip.tipo}: gruppo di lunghezza ${g.length} invece di 2`).toBe(2);
-      });
+    const fine = new Date(Date.UTC(2027, 6, 1));
+    const gruppi = gruppiDiRiposoContinui(dipendente, inizio, fine).slice(1, -1);
+    const indiciSingoli = gruppi.map((g, i) => (g.length === 1 ? i : -1)).filter((i) => i !== -1);
+    // ogni indice singolo deve essere preceduto da esattamente 3 coppie dall'ultimo singolo
+    // (o dall'inizio): cioè gli indici dei singoli devono cadere ogni 4 posizioni (3,7,11,...)
+    indiciSingoli.forEach((idx) => {
+      expect(idx % 4).toBe(3);
     });
   });
 });

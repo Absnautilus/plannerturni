@@ -7,23 +7,18 @@
 // Risolti con un "rotationSlot" stabile assegnato una volta al dipendente e una generazione
 // continua nel tempo (mai ancorata a un "mese 0" implicito).
 
-// FIX #11: due tentativi precedenti calcolavano un "offset" (0=Lun...6=Dom) come funzione pura
-// di anno/mese/giorno, che cambiava valore o ogni mese di calendario o ogni 4 settimane
-// continue. Entrambi hanno lo stesso difetto di fondo: nel momento esatto in cui l'offset
-// cambia, se capita a metà di una coppia già iniziata (un giorno valutato con l'offset
-// vecchio, il giorno dopo con quello nuovo), la coppia si spezza e resta un riposo isolato —
-// capitava con periodicità irregolare, visibile chiaramente generando "Imposta riposi mesi
-// successivi" su più mesi.
-//
-// L'unico modo per non spezzare mai una coppia è non chiedersi "che offset ha QUESTO giorno"
-// ma generare le coppie IN SEQUENZA: la prossima parte sempre esattamente 7 giorni dopo la
-// precedente finché non tocca ruotare (ogni CICLO_COPPIE coppie), nel qual caso la prossima
-// coppia parte comunque alla prima occorrenza valida del nuovo giorno della settimana DOPO
-// la fine di quella in corso — mai a metà. Una coppia, una volta iniziata, è sempre completa.
+// Regola confermata (schema reale usato finora): un dipendente rotante riposa normalmente in
+// coppie di 2 giorni consecutivi a settimana. Dopo ogni 3 coppie consecutive, il turno di
+// riposo successivo è UN SOLO giorno (non una coppia) e in quel momento il giorno della
+// settimana del riposo si sposta indietro di 1, per far ruotare i turni — poi si ricomincia
+// con le coppie sul nuovo giorno. Il ciclo è quindi: coppia, coppia, coppia, singolo, coppia,
+// coppia, coppia, singolo, ... Le coppie sono generate in sequenza continua (mai come funzione
+// pura del solo giorno) così restano sempre esattamente 7 giorni l'una dall'altra, senza mai
+// dipendere da dove cadono i confini di mese.
 
 const EPOCH_LUNEDI_UTC = Date.UTC(2020, 0, 6); // lunedì 6 gennaio 2020: weekday 0 per definizione
 const MS_GIORNO = 86400000;
-const CICLO_COPPIE = 4; // dopo quante coppie consecutive il giorno di riposo ruota indietro di 1
+const COPPIE_PER_CICLO = 3; // dopo quante coppie consecutive il riposo diventa un singolo e ruota
 
 function giorniEpochDaData(anno, mese, giorno) {
   return Math.round((Date.UTC(anno, mese, giorno) - EPOCH_LUNEDI_UTC) / MS_GIORNO);
@@ -33,38 +28,42 @@ function weekdayDaGiorniEpoch(giorniEpoch) {
   return ((giorniEpoch % 7) + 7) % 7; // l'epoch è un lunedì, quindi mod 7 dà già 0=Lun...6=Dom
 }
 
-// Genera, camminando in avanti dall'epoch, le coppie di riposo (come coppie di giorniEpoch
-// [inizio, fine]) per un dato giorno-della-settimana di partenza, fino a superare
-// `finoAGiornoEpoch`. Ogni coppia dista esattamente 7 giorni dalla precedente finché non tocca
-// ruotare; quando tocca, la prossima coppia parte alla prima occorrenza del nuovo giorno della
-// settimana successiva alla fine di quella in corso — mai in mezzo.
-function generaCoppieRiposo(weekdayIniziale, finoAGiornoEpoch) {
-  const coppie = [];
+// Genera, camminando in avanti dall'epoch, gli eventi di riposo (ciascuno una coppia di
+// giorniEpoch [inizio, fine] o un singolo [giorno]) per un dato giorno-della-settimana di
+// partenza, fino a superare `finoAGiornoEpoch`. Ogni evento parte esattamente 7 giorni dopo
+// l'inizio del precedente; ogni 4° evento (dopo 3 coppie) è un giorno singolo sul nuovo
+// weekday (ruotato indietro di 1), poi si ricomincia con le coppie.
+function generaEventiRiposo(weekdayIniziale, finoAGiornoEpoch) {
+  const eventi = [];
   let weekdayCorrente = ((weekdayIniziale % 7) + 7) % 7;
   let inizio = weekdayCorrente; // primo giorno (>= epoch) con questo weekday
-  let contatore = 0;
+  let contatoreCoppie = 0;
   while (inizio <= finoAGiornoEpoch) {
-    coppie.push([inizio, inizio + 1]);
-    contatore++;
-    if (contatore % CICLO_COPPIE === 0) {
-      weekdayCorrente = ((weekdayCorrente - 1) % 7 + 7) % 7;
-      let candidato = inizio + 2; // primo giorno utile dopo la fine della coppia appena generata
-      while (weekdayDaGiorniEpoch(candidato) !== weekdayCorrente) candidato++;
-      inizio = candidato;
-    } else {
+    if (contatoreCoppie < COPPIE_PER_CICLO) {
+      eventi.push([inizio, inizio + 1]);
+      contatoreCoppie++;
       inizio += 7;
+    } else {
+      weekdayCorrente = ((weekdayCorrente - 1) % 7 + 7) % 7;
+      // il singolo cade nella stessa posizione settimanale in cui sarebbe caduta la 4a
+      // coppia, ma sul nuovo weekday: prima occorrenza del nuovo weekday da lì in poi.
+      let candidato = inizio;
+      while (weekdayDaGiorniEpoch(candidato) !== weekdayCorrente) candidato++;
+      eventi.push([candidato]);
+      contatoreCoppie = 0;
+      inizio = candidato + 7;
     }
   }
-  return coppie;
+  return eventi;
 }
 
-// true se il giorno indicato è uno dei due giorni della coppia di riposo di un dipendente
+// true se il giorno indicato è uno dei giorni di riposo (coppia o singolo) di un dipendente
 // rotante con questo weekday di partenza (derivato dal rotationSlot, o forzato per l'aggancio
 // turnante/notturno).
 function eGiornoDiRiposoRotante(weekdayIniziale, anno, mese, giorno) {
   const giornoEpoch = giorniEpochDaData(anno, mese, giorno);
-  const coppie = generaCoppieRiposo(weekdayIniziale, giornoEpoch + 1);
-  return coppie.some(([a, b]) => giornoEpoch === a || giornoEpoch === b);
+  const eventi = generaEventiRiposo(weekdayIniziale, giornoEpoch + 1);
+  return eventi.some((e) => e.includes(giornoEpoch));
 }
 
 // true se il giorno indicato è uno dei due giorni della coppia FISSA (non ruota mai) che
@@ -89,8 +88,9 @@ export function prossimoRotationSlotLibero(dipendenti) {
 
 // Calcola, per un giorno specifico, se ciascun dipendente è in riposo. "Fisso":
 // riposoFissoGiorno configurabile, non ruota mai. "Rotante" (default): rotationSlot stabile,
-// weekday di partenza (rotationSlot*2)%7. Il turnante, se rotante, riposa sempre 2 giorni della
-// settimana dopo il notturno se anch'esso rotante (stesso weekday di partenza spostato di 2).
+// weekday di partenza (rotationSlot*2)%7, ciclo coppia/coppia/coppia/singolo. Il turnante, se
+// rotante, riposa sempre 2 giorni della settimana dopo il notturno se anch'esso rotante
+// (stesso weekday di partenza spostato di 2, stesso ciclo).
 export function eRiposoPerGiorno(dipendenti, anno, mese, giorno, agganciaTurnanteANotturno = true) {
   const weekdayInizialePerId = {};
   dipendenti.forEach((d) => {
