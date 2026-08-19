@@ -26,6 +26,7 @@ import {
 import { puoEliminareDefinitivamente, disattivaDipendente, attivaDipendente } from "./domain/employeeLifecycle.js";
 import { generaICS } from "./domain/icsExport.js";
 import { profiloDaRiga, rigaDaProfiloParziale } from "./domain/profiliMapper.js";
+import { percentualeSoddisfazionePreferenze } from "./domain/preferenceSatisfaction.js";
 import {
   swapDaRiga,
   rigaDaSwap,
@@ -1182,6 +1183,24 @@ export default function PlannerTurni() {
     return res;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turni, dipendenti, giorniArray, anno, mese]);
+
+  // Percentuale di soddisfazione preferenze per ciascun dipendente, per il mese visualizzato:
+  // null se il dipendente non ha turni di copertura nel mese (niente su cui calcolare una %).
+  const percentualiPreferenze = useMemo(() => {
+    const res = {};
+    dipendenti.forEach((d) => {
+      res[d.id] = percentualeSoddisfazionePreferenze({
+        turni,
+        preferenzeEmp: preferenze[d.id],
+        empId: d.id,
+        anno,
+        mese,
+        numGiorni,
+      });
+    });
+    return res;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turni, dipendenti, preferenze, anno, mese, numGiorni]);
 
   // Recap: ferie e permessi rimanenti nell'anno (calcolato su tutti i mesi dell'anno, non solo quello visualizzato)
   const recapFeriePermessi = useMemo(() => {
@@ -2776,6 +2795,7 @@ export default function PlannerTurni() {
                           <span style={styles.badge(TIPI_TURNO[code].colore)}>{code}</span>
                         </th>
                       ))}
+                      {isAdmin && <th style={styles.th}>% preferenze</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -2792,11 +2812,21 @@ export default function PlannerTurni() {
                             {recapTurniTipo[d.id]?.[code] || 0}
                           </td>
                         ))}
+                        {isAdmin && (
+                          <td style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", borderBottom: `1px solid ${COLORI.hairline}` }}>
+                            {percentualiPreferenze[d.id] === null || percentualiPreferenze[d.id] === undefined ? "—" : `${percentualiPreferenze[d.id]}%`}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {isAdmin && (
+                <p style={{ fontSize: "11px", color: COLORI.muted, marginTop: "10px" }}>
+                  % preferenze: quota di giorni con turno assegnato in cui il turno coincide con la preferenza più alta indicata dal dipendente per quel giorno. Visibile solo agli admin.
+                </p>
+              )}
             </div>
           </>
         )}
@@ -3014,7 +3044,14 @@ export default function PlannerTurni() {
         )}
 
         {tab === "preferenze" && (
-          <SchedaPreferenze empCorrente={empCorrente} preferenze={preferenze} onSalva={aggiornaPreferenza} styles={styles} />
+          <SchedaPreferenze
+            empCorrente={empCorrente}
+            preferenze={preferenze}
+            onSalva={aggiornaPreferenza}
+            styles={styles}
+            percentualePreferenze={percentualiPreferenze[empCorrente.id]}
+            nomeMese={nomeMese}
+          />
         )}
 
         {tab === "swap" && (
@@ -4259,7 +4296,7 @@ function PreferenzeGiorniSettimana({ turniAmmessi, preferenzeGiorno, onCambia, s
   );
 }
 
-function SchedaPreferenze({ empCorrente, preferenze, onSalva, styles }) {
+function SchedaPreferenze({ empCorrente, preferenze, onSalva, styles, percentualePreferenze, nomeMese }) {
   const turniAmmessi = turniAmmessiDipendente(empCorrente);
   const [ordineLocale, setOrdineLocale] = useState(preferenze[empCorrente.id]?.ordinePreferenza || turniAmmessi);
   const [evitaLocale, setEvitaLocale] = useState(!!preferenze[empCorrente.id]?.evitaSequenzeScomode);
@@ -4277,6 +4314,16 @@ function SchedaPreferenze({ empCorrente, preferenze, onSalva, styles }) {
       <p style={{ fontSize: "13px", color: COLORI.muted, marginTop: "6px", marginBottom: "18px" }}>
         Indica le tue preferenze: verranno tenute in considerazione dall'assegnazione automatica, bilanciandole con quelle degli altri colleghi. Ricordati di salvare per renderle effettive.
       </p>
+      {percentualePreferenze !== null && percentualePreferenze !== undefined && (
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", background: COLORI.mist, borderRadius: "12px", padding: "12px 16px", marginBottom: "18px" }}>
+          <span style={{ fontSize: "22px", fontWeight: 700, color: COLORI.ottoneScuro, fontFamily: "ui-monospace, monospace" }}>
+            {percentualePreferenze}%
+          </span>
+          <span style={{ fontSize: "12px", color: COLORI.ink, lineHeight: 1.4 }}>
+            delle tue preferenze rispettate questo mese ({nomeMese}) — quota di giorni con turno assegnato in cui hai ricevuto proprio il turno che preferivi di più per quel giorno.
+          </span>
+        </div>
+      )}
       <label style={styles.label}>Ordine di preferenza turni (generale)</label>
       <p style={{ fontSize: "12px", color: COLORI.muted, margin: "2px 0 10px" }}>
         Metti in cima il turno che preferisci di più. Usa le frecce per riordinare. Vale come base, a meno che tu non imposti una preferenza più specifica per un giorno della settimana qui sotto.
