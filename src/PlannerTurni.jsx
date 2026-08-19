@@ -2402,7 +2402,11 @@ export default function PlannerTurni() {
       </div>
 
       <div style={styles.navWrapper}>
-        <div className="ptn-nav-scroll" style={styles.nav}>
+        <div
+          key={tab}
+          className="ptn-nav-scroll ptn-tab-content"
+          style={{ ...styles.nav, "--ptn-tab-offset": direzioneTab > 0 ? "36px" : "-36px" }}
+        >
           {vociNav.map((v) => (
             <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => cambiaTab(v.id)}>{v.label}</button>
           ))}
