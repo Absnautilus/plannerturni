@@ -1537,9 +1537,11 @@ export default function PlannerTurni() {
       margin: isMobile ? "12px auto 14px" : "18px auto 22px",
       padding: isMobile ? "0 14px" : "0 28px",
     },
+    // Solo lo scroll orizzontale qui: il layout/animazione delle pillole vive in un div
+    // interno separato (vedi il JSX). Su iOS Safari, un elemento con overflow-x/
+    // -webkit-overflow-scrolling e un'animazione CSS transform insieme può non animare
+    // affatto — la sua compositing layer per lo scroll "vince" sul transform.
     nav: {
-      display: "flex",
-      gap: "2px",
       background: COLORI.inkDark,
       padding: "6px",
       borderRadius: "12px",
@@ -2402,14 +2404,16 @@ export default function PlannerTurni() {
       </div>
 
       <div style={styles.navWrapper}>
-        <div
-          key={tab}
-          className="ptn-nav-scroll ptn-tab-content"
-          style={{ ...styles.nav, "--ptn-tab-offset": direzioneTab > 0 ? "36px" : "-36px" }}
-        >
-          {vociNav.map((v) => (
-            <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => cambiaTab(v.id)}>{v.label}</button>
-          ))}
+        <div className="ptn-nav-scroll" style={styles.nav}>
+          <div
+            key={tab}
+            className="ptn-tab-content"
+            style={{ display: "flex", gap: "2px", "--ptn-tab-offset": direzioneTab > 0 ? "36px" : "-36px" }}
+          >
+            {vociNav.map((v) => (
+              <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => cambiaTab(v.id)}>{v.label}</button>
+            ))}
+          </div>
         </div>
       </div>
 
