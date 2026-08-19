@@ -1,3 +1,5 @@
+import { eTurnoDiCopertura } from "../constants/shifts.js";
+
 // FIX #5: prima la regola "DNM blocca la modifica" era duplicata (male) o assente in punti
 // diversi del codice: impostaTurno() la ignorava sul codice, correggiSequenza() controllava
 // il DNM del collega nello scambio ma MAI quello del proprio slot, applicaPreassegnazioneTurno()
@@ -25,8 +27,17 @@ export function throwIfNotModifiable(shift, context = "") {
 // FIX #4: un'assenza approvata (Ferie/Permesso) va protetta dalla rigenerazione automatica
 // del planning A PRESCINDERE dal flag DNM — altrimenti "Assegna automaticamente" la cancella
 // silenziosamente ogni volta che non è stata anche bloccata manualmente.
+//
+// FIX #12: l'elenco protetto era fisso ["F","P"], mai aggiornato quando sono arrivate le
+// nuove etichette di assenza (P1-8, R1-8, RS, RR, AS, M, FG, CON, PL) — venivano cancellate
+// in silenzio a ogni "Assegna automaticamente", a meno di bloccarle anche manualmente col
+// DNM. Ora si deriva da TIPI_TURNO invece di un elenco hardcoded, così resta corretto anche
+// se in futuro si aggiungono altre etichette senza ricordarsi di aggiornare questo file:
+// protetto tutto ciò che non è un turno di copertura (ha un orario) e non è il riposo (che va
+// sempre ricalcolato da zero, come i turni di copertura).
 export function eProtettoDaRigenerazione(shift) {
   if (!shift) return false;
   if (shift.dnm === true) return true;
-  return shift.code === "F" || shift.code === "P";
+  if (shift.code === "R") return false;
+  return !eTurnoDiCopertura(shift.code);
 }

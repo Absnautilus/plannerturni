@@ -1,7 +1,7 @@
 import { giornoSettimana, formattaData } from "./dates.js";
 import { eRiposoPerGiorno } from "./restRotation.js";
 import { eProtettoDaRigenerazione } from "./shiftGuards.js";
-import { categoriaTurno } from "../constants/shifts.js";
+import { categoriaTurno, eTurnoDiCopertura } from "../constants/shifts.js";
 import { turniBaseDipendente, turniExtraDipendente } from "../constants/employeeTypes.js";
 
 function keyTurno(empId, anno, mese, giorno) {
@@ -90,8 +90,12 @@ export function generateSchedule({
     return count;
   };
 
+  // FIX #12: usava un elenco fisso ["R","F","P"], mai aggiornato quando sono arrivate le
+  // nuove etichette di assenza (P1-8, R1-8, RS, RR, AS, M, FG, CON, PL) — venivano contate
+  // come turni lavorati nel bilanciamento dell'assegnazione automatica, favorendo di fatto
+  // chi aveva più giorni di assenza segnati invece di penalizzarli correttamente.
   const conteggioTurniMese = (empId) =>
-    giorniArray.filter((g) => nuoviTurni[kt(empId, g)]?.code && !["R", "F", "P"].includes(nuoviTurni[kt(empId, g)].code)).length;
+    giorniArray.filter((g) => eTurnoDiCopertura(nuoviTurni[kt(empId, g)]?.code)).length;
 
   const conteggioCategoriaMese = (empId, categoria) =>
     giorniArray.filter((g) => categoriaTurno(nuoviTurni[kt(empId, g)]?.code) === categoria).length;

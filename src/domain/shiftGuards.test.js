@@ -47,4 +47,14 @@ describe("eProtettoDaRigenerazione (FIX #4)", () => {
   it("nessun turno esistente non è protetto", () => {
     expect(eProtettoDaRigenerazione(undefined)).toBe(false);
   });
+
+  it("il riposo (R) NON è protetto: va sempre ricalcolato da zero, come i turni di copertura", () => {
+    expect(eProtettoDaRigenerazione({ code: "R", dnm: false })).toBe(false);
+  });
+
+  it("FIX #12: le nuove etichette di assenza (malattia, congedo, permessi a ore...) sono protette come F/P, anche con dnm:false", () => {
+    ["P8", "R3", "RS", "RR", "AS", "M", "FG", "CON", "PL"].forEach((code) => {
+      expect(eProtettoDaRigenerazione({ code, dnm: false }), `${code} dovrebbe essere protetto`).toBe(true);
+    });
+  });
 });

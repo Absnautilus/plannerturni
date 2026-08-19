@@ -1,15 +1,8 @@
 import { giornoSettimana } from "./dates.js";
-import { TIPI_TURNO } from "../constants/shifts.js";
+import { eTurnoDiCopertura } from "../constants/shifts.js";
 
 function keyTurno(empId, anno, mese, giorno) {
   return `${empId}_${anno}_${mese}_${giorno}`;
-}
-
-// Un turno "di copertura" (A1/A2/C1/C2/N/D1/D2/F1/F2/CE) ha sempre un orario; riposo, ferie,
-// permesso e le etichette di assenza (P1-8, R1-8, RS, RR, AS, M, FG) no — su questi ultimi non
-// ha senso valutare una "preferenza rispettata".
-function eTurnoDiCopertura(codice) {
-  return !!TIPI_TURNO[codice]?.orario;
 }
 
 // La preferenza più alta di un dipendente per un giorno della settimana: prima quella

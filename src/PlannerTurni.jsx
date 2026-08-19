@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { TIPI_TURNO, CODICI_MATTINA, CODICI_POMERIGGIO, categoriaTurno } from "./constants/shifts.js";
+import { TIPI_TURNO, CODICI_MATTINA, CODICI_POMERIGGIO, categoriaTurno, eTurnoDiCopertura } from "./constants/shifts.js";
 import { TIPI_DIPENDENTE, turniAmmessiDipendente } from "./constants/employeeTypes.js";
 import {
   GIORNI_SETTIMANA,
@@ -1159,10 +1159,13 @@ export default function PlannerTurni() {
   const riepilogoOre = useMemo(() => {
     const res = {};
     dipendenti.forEach((d) => {
+      // FIX #12: usava un elenco fisso ["R","F","P"], mai aggiornato quando sono arrivate le
+      // nuove etichette di assenza (P1-8, R1-8, RS, RR, AS, M, FG, CON, PL) — venivano
+      // contate come giorni lavorati nella colonna "Gg lav." del calendario.
       let giorniLavorati = 0;
       giorniArray.forEach((g) => {
         const t = turni[kt(d.id, g)];
-        if (t && !["R", "F", "P"].includes(t.code)) giorniLavorati++;
+        if (eTurnoDiCopertura(t?.code)) giorniLavorati++;
       });
       res[d.id] = giorniLavorati;
     });
@@ -2946,7 +2949,13 @@ export default function PlannerTurni() {
                   <select style={styles.select} value={nuovoCodiceRegola} onChange={(e) => setNuovoCodiceRegola(e.target.value)}>
                     <option value="">Seleziona turno...</option>
                     {Object.keys(TIPI_TURNO)
-                      .filter((c) => !["R", "F", "P", "D1", "D2", "F1", "F2"].includes(c) && coperturaRegole[c] === undefined)
+                      // FIX #12: escludeva a mano ["R","F","P","D1","D2","F1","F2"], mai
+                      // aggiornato quando sono arrivate le nuove etichette di assenza — un
+                      // admin poteva impostare una regola di copertura tipo "servono 3
+                      // persone in Malattia ogni giorno", che non ha senso. D1/D2/F1/F2 sono
+                      // turni di copertura veri ma gestiti in automatico (Passo 3), quindi
+                      // restano esclusi qui a mano.
+                      .filter((c) => eTurnoDiCopertura(c) && !["D1", "D2", "F1", "F2"].includes(c) && coperturaRegole[c] === undefined)
                       .map((c) => (
                         <option key={c} value={c}>{c} — {TIPI_TURNO[c].label}</option>
                       ))}

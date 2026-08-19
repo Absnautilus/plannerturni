@@ -49,3 +49,11 @@ export function categoriaTurno(codice) {
   if (CODICI_POMERIGGIO.includes(codice)) return "pomeriggio";
   return null;
 }
+
+// Un turno "di copertura" (A1/A2/C1/C2/N/D1/D2/F1/F2/CE) ha sempre un orario; riposo, ferie,
+// permesso e le etichette di assenza (P1-8, R1-8, RS, RR, AS, M, FG, CON, PL) no. Unica fonte
+// di verità per "questo codice è un turno lavorato o solo un'etichetta sulla giornata" — usata
+// sia per bilanciare l'assegnazione automatica sia per i riepiloghi "giorni lavorati".
+export function eTurnoDiCopertura(codice) {
+  return !!TIPI_TURNO[codice]?.orario;
+}
