@@ -37,6 +37,8 @@ export const TIPI_TURNO = {
   AS: { label: "Assenza ingiustificata", orario: "", colore: "#9AA0A6" },
   M: { label: "Malattia", orario: "", colore: "#9AA0A6" },
   FG: { label: "Festività goduta", orario: "", colore: "#9AA0A6" },
+  CON: { label: "Congedo parentale", orario: "", colore: "#9AA0A6" },
+  PL: { label: "Permesso lutto", orario: "", colore: "#9AA0A6" },
 };
 
 export const CODICI_MATTINA = ["A1", "A2"];

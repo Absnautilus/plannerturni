@@ -1,5 +1,5 @@
 import { giornoSettimana, formattaData } from "./dates.js";
-import { calcolaOffsetRiposoPerMese } from "./restRotation.js";
+import { eRiposoPerGiorno } from "./restRotation.js";
 import { eProtettoDaRigenerazione } from "./shiftGuards.js";
 import { categoriaTurno } from "../constants/shifts.js";
 import { turniBaseDipendente, turniExtraDipendente } from "../constants/employeeTypes.js";
@@ -66,14 +66,15 @@ export function generateSchedule({
   const nuoviConflitti = [];
 
   // --- Passo 1: giorni di riposo ---
-  const offsetRiposoPerId = calcolaOffsetRiposoPerMese(dipendentiAttivi, anno, mese, regoleAttive.riposoTurnanteDopoNotturno);
-  dipendentiAttivi.forEach((d) => {
-    const offsetRiposo = offsetRiposoPerId[d.id];
-    giorniArray.forEach((giorno) => {
+  // FIX #11: le coppie di riposo sono generate in sequenza continua (mai come funzione pura
+  // del solo giorno): questo evita di spezzare una coppia già iniziata quando il mese cambia
+  // di calendario. Vedi eRiposoPerGiorno in restRotation.js.
+  giorniArray.forEach((giorno) => {
+    const riposoPerId = eRiposoPerGiorno(dipendentiAttivi, anno, mese, giorno, regoleAttive.riposoTurnanteDopoNotturno);
+    dipendentiAttivi.forEach((d) => {
       const k = kt(d.id, giorno);
       if (nuoviTurni[k]) return;
-      const gs = giornoSettimana(anno, mese, giorno);
-      if (gs === offsetRiposo || gs === (offsetRiposo + 1) % 7) {
+      if (riposoPerId[d.id]) {
         nuoviTurni[k] = { code: "R", dnm: false };
       }
     });

@@ -12,7 +12,7 @@ import {
   meseSuccessivo,
   mesePrecedente,
 } from "./domain/dates.js";
-import { calcolaOffsetRiposoPerMese, prossimoRotationSlotLibero } from "./domain/restRotation.js";
+import { eRiposoPerGiorno, prossimoRotationSlotLibero } from "./domain/restRotation.js";
 import { canModifyShift, eProtettoDaRigenerazione } from "./domain/shiftGuards.js";
 import { generateSchedule } from "./domain/assignment.js";
 import {
@@ -1135,19 +1135,20 @@ export default function PlannerTurni() {
         const meseTarget = (mese + offset) % 12;
         const annoTarget = anno + Math.floor((mese + offset) / 12);
         const giorniTarget = giorniDelMese(annoTarget, meseTarget);
-        const offsetRiposoPerId = calcolaOffsetRiposoPerMese(dipendentiOperativi, annoTarget, meseTarget);
 
-        dipendentiOperativi.forEach((d) => {
-          const offsetRiposo = offsetRiposoPerId[d.id];
-          for (let giorno = 1; giorno <= giorniTarget; giorno++) {
+        // FIX #11: le coppie di riposo sono generate in sequenza continua (mai come funzione
+        // pura del solo giorno): questo evita di spezzare una coppia già iniziata quando il
+        // mese cambia di calendario. Vedi eRiposoPerGiorno in restRotation.js.
+        for (let giorno = 1; giorno <= giorniTarget; giorno++) {
+          const riposoPerId = eRiposoPerGiorno(dipendentiOperativi, annoTarget, meseTarget, giorno);
+          dipendentiOperativi.forEach((d) => {
             const k = keyTurno(d.id, annoTarget, meseTarget, giorno);
-            if (next[k]) continue; // non sovrascrivere un turno già presente
-            const gs = giornoSettimana(annoTarget, meseTarget, giorno);
-            if (gs === offsetRiposo || gs === (offsetRiposo + 1) % 7) {
+            if (next[k]) return; // non sovrascrivere un turno già presente
+            if (riposoPerId[d.id]) {
               next[k] = { code: "R", dnm: false };
             }
-          }
-        });
+          });
+        }
       }
       return next;
     });
