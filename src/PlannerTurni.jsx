@@ -593,6 +593,27 @@ export default function PlannerTurni() {
   // sotto: dichiarato qui, prima di ogni return anticipato, per non violare le Rules of Hooks.
   const touchInizioRef = useRef(null);
 
+  // Indicatore attivo della navbar: invece di dare lo sfondo bianco al singolo bottone
+  // attivo (che "salta" da un bottone all'altro senza transizione visibile), un div assoluto
+  // scivola sulla posizione reale del bottone attivo, misurata dal DOM — left/width normali
+  // con una transition CSS, non un'animazione legata a remount: tecnica molto più affidabile
+  // multi-browser di quella provata prima per il contenuto.
+  const navBtnRefs = useRef({});
+  const navContainerRef = useRef(null);
+  const [navHighlight, setNavHighlight] = useState({ left: 0, width: 0, pronto: false });
+  useEffect(() => {
+    const bottone = navBtnRefs.current[tab];
+    const contenitore = navContainerRef.current;
+    if (!bottone || !contenitore) return;
+    const rBottone = bottone.getBoundingClientRect();
+    const rContenitore = contenitore.getBoundingClientRect();
+    setNavHighlight({
+      left: rBottone.left - rContenitore.left + contenitore.scrollLeft,
+      width: rBottone.width,
+      pronto: true,
+    });
+  }, [tab, isMobile]);
+
   // Doppio requestAnimationFrame per la transizione slide di cambiaTab() più sotto: anche
   // questo effetto deve stare qui, PRIMA di ogni return anticipato (stessa ragione di
   // touchInizioRef sopra) — un hook dichiarato dopo un return condizionale fa scattare
@@ -1556,15 +1577,19 @@ export default function PlannerTurni() {
     // -webkit-overflow-scrolling e un'animazione CSS transform insieme può non animare
     // affatto — la sua compositing layer per lo scroll "vince" sul transform.
     nav: {
+      position: "relative",
       background: COLORI.inkDark,
       padding: "6px",
       borderRadius: "12px",
       overflowX: "auto",
       WebkitOverflowScrolling: "touch",
     },
+    // Lo sfondo bianco non è più qui: lo fornisce il div assoluto navHighlight (vedi JSX),
+    // che scivola sulla posizione reale del bottone attivo invece di comparire di colpo.
     navBtn: (active) => ({
+      position: "relative",
       border: "none",
-      background: active ? "#FFFFFF" : "transparent",
+      background: "transparent",
       color: active ? COLORI.ink : "rgba(255,255,255,0.65)",
       padding: isMobile ? "9px 14px" : "10px 18px",
       borderRadius: "8px",
@@ -1575,7 +1600,7 @@ export default function PlannerTurni() {
       letterSpacing: "0.01em",
       whiteSpace: "nowrap",
       flexShrink: 0,
-      transition: "background 0.28s cubic-bezier(0.22, 1, 0.36, 1), color 0.28s ease",
+      transition: "color 0.28s ease",
     }),
     container: { padding: isMobile ? "0 14px 28px" : "0 28px 40px", maxWidth: "1180px", margin: "0 auto" },
     card: {
@@ -2437,10 +2462,30 @@ export default function PlannerTurni() {
       </div>
 
       <div style={styles.navWrapper}>
-        <div className="ptn-nav-scroll" style={styles.nav}>
-          <div style={{ display: "flex", gap: "2px", ...stileTransizioneTab() }}>
+        <div ref={navContainerRef} className="ptn-nav-scroll" style={styles.nav}>
+          <div
+            style={{
+              position: "absolute",
+              top: "6px",
+              bottom: "6px",
+              left: `${navHighlight.left}px`,
+              width: `${navHighlight.width}px`,
+              background: "#FFFFFF",
+              borderRadius: "8px",
+              opacity: navHighlight.pronto ? 1 : 0,
+              transition: "left 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          />
+          <div style={{ display: "flex", gap: "2px" }}>
             {vociNav.map((v) => (
-              <button key={v.id} style={styles.navBtn(tab === v.id)} onClick={() => cambiaTab(v.id)}>{v.label}</button>
+              <button
+                key={v.id}
+                ref={(el) => { navBtnRefs.current[v.id] = el; }}
+                style={styles.navBtn(tab === v.id)}
+                onClick={() => cambiaTab(v.id)}
+              >
+                {v.label}
+              </button>
             ))}
           </div>
         </div>
