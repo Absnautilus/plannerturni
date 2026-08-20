@@ -559,6 +559,16 @@ export default function PlannerTurni() {
           return;
         }
         localStorage.setItem(ULTIMA_ATTIVITA_KEY, String(Date.now()));
+        // "TOKEN_REFRESHED"/"USER_UPDATED" arrivano su una sessione già attiva (es. Supabase
+        // rinnova il token da solo anche solo tornando su questa scheda del browser dopo
+        // averla lasciata in background) — non c'è nulla di nuovo da caricare. Ricaricare qui
+        // sovrascriverebbe incondizionatamente bozze/riposi impostati non ancora salvati (sia
+        // il calendario turni, sia la bozza della lista Dipendenti, che si riallinea da sola a
+        // ogni cambio di `dipendenti`): lo facciamo solo per un vero nuovo accesso.
+        if (evento === "TOKEN_REFRESHED" || evento === "USER_UPDATED") {
+          setSessionePronta(true);
+          return;
+        }
         const profili = await ricaricaDipendenti();
         await caricaTurniEStato();
         await ricaricaRichieste();
