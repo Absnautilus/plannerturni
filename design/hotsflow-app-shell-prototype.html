@@ -76,6 +76,12 @@
   *::-webkit-scrollbar-thumb{background-color:var(--line-strong);border-radius:99px;border:2px solid transparent;background-clip:padding-box;}
   *::-webkit-scrollbar-thumb:hover{background-color:var(--muted);}
   *::-webkit-scrollbar-corner{background:transparent;}
+  /* scroll orizzontale (frame/tabelle): scrollbar a comparsa solo in hover, non sempre visibile */
+  .frame,.tbl-wrap{scrollbar-color:transparent transparent;transition:scrollbar-color var(--motion-default) var(--motion-ease);}
+  .frame::-webkit-scrollbar-thumb,.tbl-wrap::-webkit-scrollbar-thumb{background-color:transparent;transition:background-color var(--motion-default) var(--motion-ease);}
+  .frame:hover,.tbl-wrap:hover{scrollbar-color:var(--line-strong) transparent;}
+  .frame:hover::-webkit-scrollbar-thumb,.tbl-wrap:hover::-webkit-scrollbar-thumb{background-color:var(--line-strong);}
+  .frame::-webkit-scrollbar-thumb:hover,.tbl-wrap::-webkit-scrollbar-thumb:hover{background-color:var(--muted) !important;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased;}
   h1,h2,h3,h4{margin:0;font-family:var(--f-head);text-wrap:balance;}
   code,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
@@ -1945,3 +1951,18 @@
   </div>
 
 </div>
+<script>
+(function(){
+  // rotella verticale → scroll orizzontale, solo sui contenitori che scorrono di lato
+  // (.frame, .tbl-wrap) e solo se hanno davvero altro da mostrare oltre il bordo visibile.
+  document.querySelectorAll('.frame, .tbl-wrap').forEach(function(el){
+    el.addEventListener('wheel', function(e){
+      if (el.scrollWidth <= el.clientWidth) return;
+      var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!delta) return;
+      el.scrollLeft += delta;
+      e.preventDefault();
+    }, { passive: false });
+  });
+})();
+</script>
