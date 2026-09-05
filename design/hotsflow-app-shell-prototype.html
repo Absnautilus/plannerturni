@@ -1654,8 +1654,8 @@
 
   <div class="proto-label">
     <span class="idx">04b</span>
-    <div class="proto-label-wrap"><h2>Ruolo Core ↔ ruolo locale — la mappatura non ancora fatta</h2>
-    <div class="note">L'invito qui sopra assegna uno dei 4 ruoli fissi del Core. Il codice di ciascun modulo, oggi, controlla ancora il proprio ruolo locale — ecco cosa succede a metterli fianco a fianco.</div></div>
+    <div class="proto-label-wrap"><h2>Autorizzazione moduli — migrazione al Core</h2>
+    <div class="note">I ruoli Core non richiedono un equivalente 1:1 nei moduli. Il modello target autorizza le azioni tramite permission e scope del Core; durante la migrazione, un compatibility layer mantiene attivi i controlli locali ancora necessari.</div></div>
   </div>
 
   <div class="content-narrow" style="margin:0 auto;">
@@ -1665,32 +1665,54 @@
       <tbody>
         <tr>
           <td><b>Receptionist</b><br><span style="color:var(--muted);font-size:11px;font-weight:400;">rank 10</span></td>
-          <td>Operatore <span style="color:var(--muted)">(dept. reception)</span></td>
-          <td>Dipendente</td>
-          <td>Staff</td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
         </tr>
         <tr>
           <td><b>Manager</b><br><span style="color:var(--muted);font-size:11px;font-weight:400;">rank 20</span></td>
-          <td><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Nessun equivalente</span></td>
-          <td><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Nessun equivalente</span></td>
-          <td><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Nessun equivalente</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
         </tr>
         <tr>
           <td><b>Property Admin</b><br><span style="color:var(--muted);font-size:11px;font-weight:400;">rank 30</span></td>
-          <td>Admin <span style="color:var(--muted)">(hotel-scoped)</span></td>
-          <td>Admin <span style="color:var(--muted)">(<code>isAdmin</code>)</span></td>
-          <td>Admin <span style="color:var(--muted)">(<code>isOrgAdmin</code>)</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
         </tr>
         <tr>
           <td><b>Organization Admin</b><br><span style="color:var(--muted);font-size:11px;font-weight:400;">rank 40</span></td>
-          <td><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Nessun equivalente</span></td>
-          <td><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Nessun equivalente</span></td>
-          <td><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Nessun equivalente</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
+          <td><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Permessi Core</span></td>
         </tr>
       </tbody>
     </table>
   </div>
-  <div class="caption" style="max-width:100%;">↑ Solo 2 ruoli su 4 hanno oggi un equivalente plausibile in ciascun modulo — e anche quei due (Receptionist↔Operatore/Dipendente/Staff, Property Admin↔Admin) sono una corrispondenza <b>provvisoria</b>, non una decisione presa: nessuno dei tre repository sa oggi cosa sia un "ruolo Core", perché nessuno legge ancora da <code>memberships</code>/<code>role_permissions</code> — ciascuno controlla la propria colonna locale (<code>profile.role</code>, <code>isAdmin</code>, <code>isOrgAdmin</code>). <b>Manager e Organization Admin non hanno alcun equivalente in nessun modulo</b>: se oggi un Organization Admin del Core aprisse Housekeeping, il suo codice non saprebbe cosa farne — vedrebbe probabilmente la vista più bassa (operatore), non quella più alta, semplicemente perché non esiste un terzo/quarto stato da assegnargli. Colmare questa distanza è lavoro di migrazione reale per ciascun modulo (riscrivere i controlli <code>role === 'admin'</code> in chiamate del tipo <code>hasPermission()</code> contro il Core), non una scelta di UI. <b>"Master" di Housekeeping resta fuori da questa tabella di proposito</b>: non è "più" di Organization Admin sulla stessa scala — è un asse diverso, cross-organization e non solo cross-property (vedi 01f) — incastrarlo in una riga qui sopra sarebbe scorretto quanto ometterlo.</div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 0;color:var(--muted);">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+    <div style="font-size:11.5px;font-weight:700;background:var(--surface-2);padding:6px 14px;border-radius:999px;">compatibility layer — solo dove ancora serve</div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+    <div style="font-size:11.5px;font-weight:700;color:var(--red-ink);background:var(--red-bg);padding:6px 14px;border-radius:999px;">controlli di ruolo legacy (oggi)</div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="dt">
+      <thead><tr><th>Modulo</th><th>Ruoli legacy oggi</th><th>Enforcement</th></tr></thead>
+      <tbody>
+        <tr><td>Housekeeping</td><td><code>operatore</code> / <code>admin</code> / <code>master</code> + <code>department</code></td><td>RLS (<code>current_staff_role()</code>, migrazioni 0002/0006/…)</td></tr>
+        <tr><td>Turni</td><td><code>isAdmin</code> booleano</td><td>Supabase Auth + query client-side</td></tr>
+        <tr><td>Transfer</td><td><code>isOrgAdmin</code> booleano</td><td>Auth.js/NextAuth + query server-side</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="caption" style="max-width:100%;">↑ <b>Non è più una mappatura riga-per-riga.</b> Il modello target è: <code>membership → ruolo Core → role_permissions → permission</code>, valutato con scope (property vs organization) ed entitlement di modulo separati — non "che ruolo locale corrisponde a Manager". Un modulo dovrebbe chiedere <code>can("housekeeping.requests.manage")</code>, non "sei admin?".<br><br>
+  <b>Verificato nel Core reale</b> (<code>0009_bootstrap_reference_data.sql</code>): oggi esistono solo 4 permessi core (<code>core.organization.manage</code>, <code>core.property.manage</code>, <code>core.staff.manage</code>, <code>core.roles.assign</code>) — nessuno specifico di modulo nella baseline di sistema. <code>seed.sql</code> aggiunge <code>shifts.use</code>/<code>transfers.use</code>/<code>guest_requests.view</code> come permessi <i>illustrativi</i> (solo ambiente dev, non garantiti su un progetto reale) — granularità "use/view", non "manage". <b>Correzione rispetto alla versione precedente di questa pagina</b>: avevo scritto <code>guest_requests.manage</code> come se esistesse già — non è così, non esiste alcun permesso <code>.manage</code> per nessun modulo oggi. Un vero <code>housekeeping.requests.manage</code> andrebbe definito da zero, seguendo il precedente di <code>guest_requests.view</code>.<br><br>
+  <b>Verificato in Housekeeping</b>: i controlli di ruolo non sono solo UI — sono dentro le RLS policy stesse (es. <code>hotels_select_master</code>, migrazione 0006, verifica <code>current_staff_is_master()</code> a livello di database). Housekeeping ha oggi il proprio progetto Supabase/<code>auth.users</code>, completamente separato da quello del Core: nessun bridge esiste ancora, in nessuna direzione. Per questo il compatibility layer non è un dettaglio implementativo minore — è l'unico modo, oggi, di far coesistere le due cose durante l'integrazione.<br><br>
+  <b>Master resta un asse a sé</b>, non "più" di Organization Admin sulla stessa scala: la sua RLS (<code>hotels_select_master</code>) lo fa vedere ogni hotel dell'installazione, non solo quelli di un'organization — cross-organization, non cross-property. Non è detto sia nemmeno un concetto di autorizzazione "hotel-side": più probabile sia strumentazione interna/piattaforma (supporto, provisioning) — ma è una domanda di prodotto ancora aperta, non una mappatura che questo prototipo decide da solo.</div>
   </div>
 
   <div class="proto-label">
@@ -1930,6 +1952,7 @@
         <div class="mod-tabs">
           <a class="active">Richieste</a>
           <a>Camere</a>
+          <a style="margin-left:auto;color:var(--accent);">Altro ▾</a>
         </div>
         <div class="mod-filters">
           <button class="active">Tutte</button>
@@ -1953,20 +1976,20 @@
       </div>
     </div>
     <div class="caption" style="max-width:420px;">
-      Niente bottom nav qui dentro — la freccia in alto a sinistra torna alla schermata di provenienza (di norma Home), non è "indietro nel browser". L'hamburger a destra apre la navigazione secondaria (vedi 07d, due opzioni a confronto).<br><br>
+      Niente bottom nav qui dentro — la freccia in alto a sinistra torna alla schermata di provenienza (di norma Home), non è "indietro nel browser". <b>Altro</b>, in fondo alle tab, apre le destinazioni secondarie del modulo (Report, Impostazioni Housekeeping) — decisione presa, vedi 07d. L'hamburger resta separato, solo per la navigazione globale di Hotsflow.<br><br>
       <b>Richieste / Camere</b> sono le uniche due tab permanenti: le 2-3 destinazioni usate di continuo durante il turno — sono <i>navigazione</i> di modulo, cambiano cosa vedi. <b>Tutte / Da fare / In corso</b>, subito sotto, sono <i>filtri</i> sulla stessa schermata — stesso posto, stesso elenco, vista ristretta. Le ho rese visivamente diverse apposta (sottolineatura per le tab, pillole per i filtri): confonderle sarebbe far sembrare 5 destinazioni dove ce ne sono 2.
     </div>
   </div>
 
   <div class="proto-label">
     <span class="idx">07d</span>
-    <div class="proto-label-wrap"><h2>Navigazione secondaria mobile — due opzioni a confronto</h2>
-    <div class="note">Una sola decisione resta aperta: dove vanno le destinazioni secondarie di Housekeeping (Report, Impostazioni Housekeeping) rispetto a quelle globali di Hotsflow.</div></div>
+    <div class="proto-label-wrap"><h2>Navigazione secondaria mobile — decisione presa: Opzione B</h2>
+    <div class="note">Drawer (☰) esclusivamente globale, sempre identico ovunque nella suite. Le destinazioni secondarie del modulo (Report, Impostazioni Housekeeping) vivono solo dietro "Altro", accanto alle tab — non nel drawer.</div></div>
   </div>
 
   <div class="cols2">
-    <div>
-      <div class="fc-lbl" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;">Opzione A — drawer combinato</div>
+    <div style="opacity:.55;">
+      <div class="fc-lbl" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;">Opzione A — drawer combinato <span style="color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;">(scartata)</span></div>
       <div class="phone drawer-open">
         <div class="drawer-scrim"></div>
         <div class="drawer-panel">
@@ -1990,7 +2013,7 @@
     </div>
 
     <div>
-      <div class="fc-lbl" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;">Opzione B — drawer solo globale + "Altro" sul modulo</div>
+      <div class="fc-lbl" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-bottom:10px;">Opzione B — drawer solo globale + "Altro" sul modulo ✓ scelta</div>
       <div class="phone">
         <div class="m-tb"><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span><span class="cur">Housekeeping</span><span class="hb"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
         <div class="mod-tabs" style="position:relative;">
@@ -2011,7 +2034,7 @@
       <div class="caption" style="max-width:340px;">Il drawer (☰) qui resta <b>esclusivamente</b> globale — identico a quello di 07b, senza Report/Impostazioni Housekeeping dentro. Le destinazioni secondarie del modulo vivono solo dietro "Altro", accanto alle tab.</div>
     </div>
   </div>
-  <div class="caption" style="max-width:100%;">↑ <b>A favore di A</b>: un solo posto dove cercare "tutto il resto", meno probabilità di cercare Report nel posto sbagliato. <b>Contro di A</b>: il drawer globale (già usato identico per Home/Team/Moduli/Impostazioni in 07b) acquisisce una sezione in più specifica del modulo — meno prevedibile se il drawer deve restare "sempre uguale a sé stesso" ovunque nella suite. <b>A favore di B</b>: il drawer resta un concetto a sé, sempre identico indipendentemente da dove ti trovi (proprietà forte per un pattern che vale su tre moduli diversi); "Altro" resta vicino a Richieste/Camere, stesso contesto visivo della navigazione di modulo. <b>Contro di B</b>: un controllo in più da imparare (l'overflow "Altro"), e due punti di ingresso alla navigazione invece di uno solo. Non ho una preferenza netta da imporre: la B tiene più pulita la separazione shell/modulo (principio guida di tutto questo giro di modifiche); la A riduce il numero di controlli mobile da conoscere. Decisione da prendere prima di considerare chiusa la navigazione mobile.</div>
+  <div class="caption" style="max-width:100%;">↑ <b>Decisione: Opzione B.</b> Il drawer (☰) resta un concetto a sé, sempre identico indipendentemente da dove ti trovi nella suite — stesso contenuto in 07b, qui, e dentro Turni/Transfer quando arriveranno. "Altro" vive accanto a Richieste/Camere, stesso contesto visivo della navigazione di modulo: chi cerca una destinazione secondaria del modulo la cerca lì, non deve ricordarsi che è finita nel drawer globale. Il costo accettato: un controllo mobile in più da imparare (l'overflow "Altro") e due punti di ingresso alla navigazione invece di uno solo — compromesso preferito a mescolare due responsabilità (navigazione di shell vs navigazione di modulo) nello stesso drawer, principio guida di tutto questo giro di modifiche. <b>Opzione A</b> resta sopra come riferimento del percorso di valutazione, non più una scelta aperta. Applicato ora ovunque nel prototipo (07c mostra "Altro" come terza voce, non più solo Richieste/Camere).</div>
 
   <div class="proto-label">
     <span class="idx">08</span>
