@@ -126,7 +126,7 @@
 
   .sb-grp{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--navbar-icon);padding:12px 10px 6px;}
   .sb-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-sm);color:var(--navbar-text-muted);font-size:13px;font-weight:600;cursor:pointer;position:relative;text-decoration:none;transition:background var(--motion-fast) var(--motion-ease),color var(--motion-fast) var(--motion-ease);}
-  .sb-item:not(.active):not(.locked):hover{background:var(--navbar-surface-hover);color:var(--navbar-text);}
+  .sb-item:not(.active):hover{background:var(--navbar-surface-hover);color:var(--navbar-text);}
   .sb-item svg{flex-shrink:0;color:var(--navbar-icon);transition:color var(--motion-fast) var(--motion-ease);}
   .sb-item .lbl{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .sb-item .cnt{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--navbar-icon);}
@@ -134,8 +134,9 @@
   .sb-item.active svg{color:var(--accent);}
   .sb-item.active::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent);}
   .sb-item.trial .cnt{color:var(--accent);}
-  .sb-item.locked{opacity:.55;}
-  .sb-item.locked svg{color:var(--navbar-icon);}
+  /* "Available", non "locked": scopribile, non ristretto — niente opacità ridotta, niente lucchetto */
+  .sb-item.discover{color:var(--navbar-text-muted);}
+  .sb-item.discover .cnt{color:var(--navbar-icon);font-weight:700;}
   .sb-spacer{flex:1;}
   .sb-account{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r-sm);}
   .sb-account:hover{background:var(--navbar-surface-hover);cursor:pointer;}
@@ -215,6 +216,19 @@
   .m-card .stat-lbl{font-size:12px;color:var(--ink-2);margin-top:-6px;}
   .m-card .body-txt{font-size:12.5px;color:var(--muted);line-height:1.55;flex:1;}
   .m-card .cta{align-self:flex-start;}
+  /* home operativa: card modulo con un solo stato + una sola CTA, niente metriche secondarie */
+  .m-card .op-status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);font-weight:600;flex:1;}
+  .m-card .op-status .dot2{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .m-card .op-status.warn{color:var(--red-ink);}
+  .m-card .op-status.muted{color:var(--muted);font-weight:500;}
+
+  /* "richiede attenzione" — sezione unica cross-modulo, solo eccezioni reali */
+  .attn-list{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);overflow:hidden;}
+  .attn-row{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);}
+  .attn-row:last-child{border-bottom:none;}
+  .attn-row .tag{flex-shrink:0;margin-top:1px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:999px;white-space:nowrap;}
+  .attn-row .tx{font-size:12.5px;color:var(--ink-2);line-height:1.5;}
+  .attn-row .tx b{color:var(--ink);font-weight:700;}
 
   .pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px 3px 8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;border:1px solid var(--pl);background:var(--pb);color:var(--pi);width:fit-content;}
   .pill .dot{width:5px;height:5px;border-radius:50%;background:currentColor;}
@@ -253,6 +267,22 @@
   .m-card .mi .tx b{color:var(--ink);font-weight:700;}
   .m-card .mi .tm{font-family:var(--mono);font-size:10.5px;color:var(--muted);flex-shrink:0;}
   .m-card .mini-more{font-size:11px;color:var(--accent);font-weight:700;margin-top:1px;}
+
+  /* home admin: "Oggi", riga compatta cross-modulo */
+  .today-strip{display:flex;flex-wrap:wrap;gap:22px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);padding:14px 20px;margin-bottom:16px;}
+  .today-strip .today-item{display:flex;align-items:baseline;gap:6px;font-size:12.5px;color:var(--ink-2);}
+  .today-strip .today-item b{font-family:var(--mono);font-size:16px;font-weight:800;color:var(--ink);}
+  .today-strip .today-item .warn{color:var(--red-ink);font-weight:700;}
+
+  /* home admin: KPI raggruppati per modulo, solo metriche reali */
+  .kpi-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:22px;}
+  .kpi-group{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);padding:16px 18px;}
+  .kpi-group-hd{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:12px;}
+  .kpi-group .kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .kpi-mini .kv{font-size:19px;font-weight:900;font-family:var(--mono);color:var(--ink);}
+  .kpi-mini .kv small{font-size:11px;font-weight:700;color:var(--muted);font-family:var(--f-body);}
+  .kpi-mini .kv.warn{color:var(--red-ink);}
+  .kpi-mini .kl{font-size:10.5px;color:var(--muted);margin-top:1px;}
 
   /* two-col lower zone */
   .lower-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-top:16px;}
@@ -464,7 +494,7 @@
   .settings-tabs button{border:none;background:transparent;padding:8px 16px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;transition:background var(--motion-default) var(--motion-ease),color var(--motion-fast) var(--motion-ease),box-shadow var(--motion-default) var(--motion-ease);}
   .settings-tabs button.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm);}
 
-  /* sotto-barra di navigazione interna al modulo (es. RoomCall: Richieste/Soggiorni/Admin) */
+  /* sotto-barra di navigazione interna al modulo (es. Housekeeping: Richieste/Soggiorni/Admin) */
   .module-subnav{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 28px;background:var(--surface);border-bottom:1px solid var(--line);}
   .module-subnav .tabs{display:flex;gap:3px;background:var(--surface-2);border-radius:999px;padding:3px;}
   .module-subnav .tabs a{display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:999px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;text-decoration:none;transition:background var(--motion-default) var(--motion-ease),color var(--motion-fast) var(--motion-ease),box-shadow var(--motion-default) var(--motion-ease);}
@@ -472,6 +502,21 @@
   .module-subnav .tabs a.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm);}
   .module-subnav .duty{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--ink-2);flex-shrink:0;}
   .module-subnav.mobile{padding:7px 10px;}
+
+  /* navigazione primaria del modulo (mobile) — livello 4, mai confusa con i filtri (livello 5) */
+  .mod-tabs{display:flex;gap:22px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--line);}
+  .mod-tabs a{padding:11px 1px;font-size:13px;font-weight:700;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px;cursor:pointer;transition:color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease);}
+  .mod-tabs a.active{color:var(--ink);border-bottom-color:var(--accent);}
+  /* filtri — sempre pillole, mai a forma di tab, per non confondersi con la navigazione sopra */
+  .mod-filters{display:flex;gap:7px;padding:10px 14px;background:var(--surface);}
+  .mod-filters button{border:none;background:var(--surface-2);padding:6px 12px;border-radius:999px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;}
+  .mod-filters button.active{background:var(--accent-soft);color:var(--accent);}
+  .req-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);}
+  .req-row:last-child{border-bottom:none;}
+  .req-row .n{font-size:13px;font-weight:700;color:var(--ink);}
+  .req-row .d{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .req-row .tm{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .req-row .tag{flex-shrink:0;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:3px 8px;border-radius:999px;white-space:nowrap;margin-top:1px;}
   .module-subnav.mobile .tabs{gap:2px;}
   .module-subnav.mobile .tabs a{padding:7px 11px;}
 
@@ -563,6 +608,23 @@
   .purp-stat input:checked ~ .purp-stat-tile{border-left-color:var(--amber-ink);box-shadow:var(--shadow-md);}
   .purp-stat-toggle{font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:8px;width:fit-content;}
 
+  /* stati di sistema condivisi — leggeri, un solo linguaggio per tutta la suite */
+  .sys-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;}
+  .sys-state{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);padding:28px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .sys-state .ic{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:8px;flex-shrink:0;}
+  .sys-state h4{font-size:13.5px;font-weight:800;color:var(--ink);}
+  .sys-state p{font-size:11.5px;color:var(--muted);line-height:1.5;max-width:200px;margin-top:2px;}
+  .sys-state .btn{margin-top:12px;}
+  .sys-spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--line-strong);border-top-color:var(--accent);animation:purpSpin .8s linear infinite;}
+
+  /* gerarchia dell'informazione — 5 livelli, mai collassati in un solo sistema di navigazione */
+  .hier-diagram{display:flex;flex-direction:column;}
+  .hier-row{display:flex;align-items:center;gap:12px;padding:9px 0;position:relative;}
+  .hier-row:not(:last-child)::after{content:"";position:absolute;left:15px;top:38px;bottom:-9px;width:1.5px;background:var(--line-strong);}
+  .hier-badge{width:30px;height:30px;border-radius:50%;background:var(--surface-2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:800;font-size:12px;flex-shrink:0;z-index:1;}
+  .hier-row .n{font-size:13px;font-weight:800;color:var(--ink);}
+  .hier-row .d{font-size:11.5px;color:var(--muted);margin-top:1px;}
+
   /* purposeful animation: 1c. feedback — loading -> done, one click, no JS (staged CSS animation) */
   @keyframes purpSpin{to{transform:rotate(360deg)}}
   @keyframes purpHideNow{to{opacity:0;visibility:hidden;}}
@@ -642,9 +704,9 @@
 <div class="proto-intro">
   <div class="eyebrow">Hotsflow · Phase 0 — UI proposal / prototype only</div>
   <h1>App Shell — bozza statica, non collegata al backend</h1>
-  <p>Riferimento strutturale: il mockup approvato (sidebar persistente, property selector, moduli, Modules/Team/Settings). Visual language: token reali della suite Hotsflow verificati nel codice di Housekeeping e Transfer — <b style="color:var(--ink)">#9C4FC7</b>, Manrope/Public Sans/JetBrains Mono, stessi radius/ombre/badge dei moduli esistenti. Nessuna riga di questa pagina scrive su un database, chiama un modulo reale o modifica un'app in produzione.</p>
+  <p>Riferimento strutturale: il mockup approvato (sidebar persistente, property selector, moduli, Moduli/Team/Impostazioni). Visual language: token reali della suite Hotsflow verificati nel codice di Housekeeping e Transfer — <b style="color:var(--ink)">#9C4FC7</b>, Manrope/Public Sans/JetBrains Mono, stessi radius/ombre/badge dei moduli esistenti. Nessuna riga di questa pagina scrive su un database, chiama un modulo reale o modifica un'app in produzione.</p>
   <div class="flags">
-    <span class="flag">7 sezioni, ogni stato richiesto</span>
+    <span class="flag">Home per ruolo, ogni stato modulo richiesto</span>
     <span class="flag">Nessun backend</span>
     <span class="flag">Nessuna migration</span>
     <span class="flag">Da approvare prima dell'implementazione</span>
@@ -679,7 +741,7 @@
         <div class="foot-note">Sei stato invitato da un amministratore? L'invito arriva via email con un link diretto — non serve passare da qui.</div>
       </div>
     </div>
-    <div class="caption" style="max-width:100%;text-align:center;padding:0 24px 22px;">↑ Un solo schermo di ingresso per l'intera suite (sostituisce i login separati oggi presenti in Housekeeping/Planner/FromTo). <b>Non c'è un modulo "Registrati"</b>: oggi (`docs/auth.md` di hotsflow-core) il primo profilo di ogni property è creato da chi ha già <code>core.staff.manage</code>, o da uno script service-role — non esiste un endpoint self-service. "Configura il tuo hotel" qui sopra è quindi un impegno preso in questa bozza, non una funzione già disponibile nel Core: va costruita (è il gap che avevo segnalato al punto E dell'audit), non è "solo collegare un bottone esistente".</div>
+    <div class="caption" style="max-width:100%;text-align:center;padding:0 24px 22px;">↑ Un solo schermo di ingresso per l'intera suite (sostituisce i login separati oggi presenti in Housekeeping/Planner/Transfer). <b>Non c'è un modulo "Registrati"</b>: oggi (`docs/auth.md` di hotsflow-core) il primo profilo di ogni property è creato da chi ha già <code>core.staff.manage</code>, o da uno script service-role — non esiste un endpoint self-service. "Configura il tuo hotel" qui sopra è quindi un impegno preso in questa bozza, non una funzione già disponibile nel Core: va costruita (è il gap che avevo segnalato al punto E dell'audit), non è "solo collegare un bottone esistente".</div>
   </div>
 
   <div class="proto-label">
@@ -727,7 +789,7 @@
       <div class="guest-frame">
         <div class="auth-card" style="width:280px;">
           <div class="icon-badge"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-          <div style="text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);">RoomCall</div>
+          <div style="text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);">Housekeeping</div>
           <div class="title">Accedi al tuo soggiorno</div>
           <div class="sub">Palazzo Veneziano</div>
           <div class="fld"><label>Camera</label><input placeholder="es. 306"></div>
@@ -735,7 +797,7 @@
           <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:16px;">Accedi</button>
         </div>
       </div>
-      <div class="caption" style="max-width:100%;">↑ Nessuna sidebar, nessun brand "app.hotsflow.com": questa è l'esperienza guest già esistente di Housekeeping/RoomCall (camera+PIN), non toccata. FromTo usa un metodo diverso per il proprio ospite (link diretto <code>/richiedi/[hotel]</code>, nessun login) — la shell non uniforma <i>come</i> l'ospite entra, solo <i>come si comporta</i> lo staff una volta dentro. Un ospite non ha mai una "property" nel senso di questa shell: non vede Modules, Team, il property selector.</div>
+      <div class="caption" style="max-width:100%;">↑ Nessuna sidebar, nessun brand "app.hotsflow.com": questa è l'esperienza guest già esistente di Housekeeping/Housekeeping (camera+PIN), non toccata. Transfer usa un metodo diverso per il proprio ospite (link diretto <code>/richiedi/[hotel]</code>, nessun login) — la shell non uniforma <i>come</i> l'ospite entra, solo <i>come si comporta</i> lo staff una volta dentro. Un ospite non ha mai una "property" nel senso di questa shell: non vede Moduli, Team, il property selector.</div>
     </div>
   </div>
   </div>
@@ -786,7 +848,7 @@
           <input type="radio" name="morphtabs" id="mt1" checked>
           <label for="mt1">Home</label>
           <input type="radio" name="morphtabs" id="mt2">
-          <label for="mt2">Modules</label>
+          <label for="mt2">Moduli</label>
           <input type="radio" name="morphtabs" id="mt3">
           <label for="mt3">Team</label>
           <span class="bar"></span>
@@ -925,8 +987,8 @@
 
   <div class="proto-label">
     <span class="idx">01</span>
-    <div class="proto-label-wrap"><h2>Home — property reale, moduli active / trial / available</h2>
-    <div class="note">Layout, gerarchia, navigazione, componenti. Le tre card riflettono lo stato reale di ciascun modulo per questa property.</div></div>
+    <div class="proto-label-wrap"><h2>Home management — "cosa sta succedendo, cosa richiede attenzione, cosa posso gestire"</h2>
+    <div class="note">Property Admin: stessa identità visiva della home operativa, densità informativa maggiore — analytics incluse perché il ruolo ha la capability per vederle, non perché il rank è più alto.</div></div>
   </div>
 
   <div class="frame">
@@ -943,14 +1005,14 @@
         <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
 
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
-        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Planner Turni</span><span class="cnt">Trial</span></a>
-        <a class="sb-item locked"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
+        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span><span class="cnt">Trial</span></a>
+        <a class="sb-item discover"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span><span class="cnt">+</span></a>
 
         <div class="sb-grp">Piattaforma</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Modules</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Moduli</span></a>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 14.4A4.6 4.6 0 0 1 20.5 19"/></svg><span class="lbl">Team</span></a>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="lbl">Settings</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="lbl">Impostazioni</span></a>
 
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
@@ -963,28 +1025,35 @@
         </div>
         <div class="content content-wash">
 
-          <div class="stat-row">
-            <div class="stat-tile">
-              <div class="lbl-row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg><span class="l">Richieste aperte</span></div>
-              <div class="v">7 <small>· 2 urgenti</small></div>
-              <div class="trend warn">↑ da 4 ieri</div>
+          <div class="section-hd"><h4>Oggi</h4></div>
+          <div class="today-strip">
+            <div class="today-item"><b>7</b> richieste aperte <span class="warn">· 2 urgenti</span></div>
+            <div class="today-item"><b>5/6</b> in turno oggi <span class="warn">· piano 2 scoperto 15–23</span></div>
+            <div class="today-item"><b>4</b> persone in servizio ora</div>
+          </div>
+
+          <div class="section-hd" style="margin-top:6px;"><h4>KPI principali</h4></div>
+          <div class="kpi-groups">
+            <div class="kpi-group">
+              <div class="kpi-group-hd">Housekeeping</div>
+              <div class="kpi-row">
+                <div class="kpi-mini"><div class="kv">7</div><div class="kl">Richieste aperte</div></div>
+                <div class="kpi-mini"><div class="kv">18<small>min</small></div><div class="kl">Tempo medio risposta</div></div>
+                <div class="kpi-mini"><div class="kv warn">1</div><div class="kl">Fuori SLA</div></div>
+                <div class="kpi-mini"><div class="kv">12</div><div class="kl">Completate oggi</div></div>
+              </div>
             </div>
-            <div class="stat-tile">
-              <div class="lbl-row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span class="l">Copertura turni oggi</span></div>
-              <div class="v">5<small>/6</small></div>
-              <div class="trend flat">Piano 2 scoperto 15–23</div>
-            </div>
-            <div class="stat-tile">
-              <div class="lbl-row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/></svg><span class="l">In servizio ora</span></div>
-              <div class="v">4</div>
-              <div class="trend up">Marco, Ana, Nguyen +1</div>
-            </div>
-            <div class="stat-tile">
-              <div class="lbl-row"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span class="l">Tempo medio risposta</span></div>
-              <div class="v">18<small>min</small></div>
-              <div class="trend up">↓ 4 min vs settimana scorsa</div>
+            <div class="kpi-group">
+              <div class="kpi-group-hd">Turni</div>
+              <div class="kpi-row">
+                <div class="kpi-mini"><div class="kv">5<small>/6</small></div><div class="kl">In turno oggi</div></div>
+                <div class="kpi-mini"><div class="kv warn">1</div><div class="kl">Turni scoperti</div></div>
+                <div class="kpi-mini"><div class="kv">1</div><div class="kl">Cambi in attesa</div></div>
+                <div class="kpi-mini"><div class="kv">1</div><div class="kl">Ferie/permessi in attesa</div></div>
+              </div>
             </div>
           </div>
+          <div class="caption" style="margin-top:-8px;margin-bottom:18px;">↑ Niente gruppo KPI per Transfer: la property non lo ha attivo (è "Available", vedi sotto) — non esistono dati reali da mostrare, quindi non si inventa un terzo riquadro vuoto o finto.</div>
 
           <div class="ob-card">
             <div class="ob-hd"><h4>Configura il tuo hotel</h4><span class="pct">2 di 5</span></div>
@@ -993,14 +1062,14 @@
               <span class="ob-step done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Informazioni struttura</span>
               <span class="ob-step done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>Camere</span>
               <span class="ob-step todo"><span class="ck"></span>Invita il team</span>
-              <span class="ob-step todo"><span class="ck"></span>Configura RoomCall</span>
+              <span class="ob-step todo"><span class="ck"></span>Configura Housekeeping</span>
               <span class="ob-step todo"><span class="ck"></span>Attiva notifiche</span>
             </div>
           </div>
 
           <div class="grid-cards">
             <div class="m-card">
-              <div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span class="nm">RoomCall</span></div>
+              <div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span class="nm">Housekeeping</span></div>
               <span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span>
               <div class="mini-list">
                 <div class="mi"><span class="dot2" style="background:var(--amber-ink)"></span><span class="tx"><b>306</b> — asciugamani extra</span><span class="tm">45 min</span></div>
@@ -1012,7 +1081,7 @@
             </div>
 
             <div class="m-card">
-              <div class="hd"><span class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Planner Turni</span></div>
+              <div class="hd"><span class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Turni</span></div>
               <span class="pill" style="--pb:var(--accent-soft);--pi:var(--accent);--pl:var(--accent-soft-line)"><span class="dot"></span>Trial · 9 giorni</span>
               <div class="mini-list">
                 <div class="mi"><span class="dot2" style="background:var(--amber-ink)"></span><span class="tx"><b>Marco B.</b> — ferie</span><span class="tm">dom</span></div>
@@ -1023,7 +1092,7 @@
             </div>
 
             <div class="m-card ghost">
-              <div class="hd"><span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">FromTo</span></div>
+              <div class="hd"><span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">Transfer</span></div>
               <span class="pill" style="--pb:var(--slate-bg);--pi:var(--slate-ink);--pl:var(--slate-line)"><span class="dot"></span>Available</span>
               <div class="body-txt">Gestisci i transfer aeroportuali e i trasferimenti degli ospiti direttamente da Hotsflow.</div>
               <button class="btn btn-secondary cta">Prova il modulo</button>
@@ -1032,26 +1101,20 @@
 
           <div class="lower-grid">
             <div class="panel">
-              <div class="panel-hd"><h4>Attività recente</h4><a>Vedi tutte</a></div>
-              <div class="feed-row">
-                <span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-                <div><div class="tx"><b>Rossi F.</b> — pulizia straordinaria completata, camera 112</div><div class="tm">6 minuti fa · Ana Simone</div></div>
-              </div>
-              <div class="feed-row">
-                <span class="ic" style="background:var(--blue-bg);color:var(--blue-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v13"/><path d="M4 14l3 3 3-3"/><path d="M17 20V7"/><path d="M20 10l-3-3-3 3"/></svg></span>
-                <div><div class="tx"><b>Sara Conti</b> ha chiesto uno scambio turno per il 4 settembre</div><div class="tm">40 minuti fa</div></div>
-              </div>
-              <div class="feed-row">
-                <span class="ic" style="background:var(--amber-bg);color:var(--amber-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L14 3.9a2 2 0 0 0-3.4 0Z"/></svg></span>
-                <div><div class="tx">Camera <b>220</b> — richiesta manutenzione in attesa da 45 minuti</div><div class="tm">1 ora fa</div></div>
-              </div>
-              <div class="feed-row">
-                <span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-                <div><div class="tx">Turno mattina di <b>Marco Bianchi</b> confermato</div><div class="tm">2 ore fa</div></div>
-              </div>
-              <div class="feed-row">
-                <span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/></svg></span>
-                <div><div class="tx"><b>Nguyen Thi</b> è entrata in servizio</div><div class="tm">3 ore fa</div></div>
+              <div class="panel-hd"><h4>Richiede attenzione</h4></div>
+              <div class="attn-list" style="box-shadow:none;border-radius:0;">
+                <div class="attn-row">
+                  <span class="tag" style="background:var(--red-bg);color:var(--red-ink)">Urgente</span>
+                  <div class="tx">Camera <b>220</b> — richiesta manutenzione in attesa da 45 minuti</div>
+                </div>
+                <div class="attn-row">
+                  <span class="tag" style="background:var(--accent-soft);color:var(--accent)">Turni</span>
+                  <div class="tx">Piano 2 scoperto domenica 15–23, nessuno assegnato</div>
+                </div>
+                <div class="attn-row">
+                  <span class="tag" style="background:var(--accent-soft);color:var(--accent)">Turni</span>
+                  <div class="tx"><b>Sara Conti</b> ha chiesto uno scambio turno per il 4 settembre — in attesa di approvazione</div>
+                </div>
               </div>
             </div>
 
@@ -1069,7 +1132,31 @@
             <div class="ref-chip"><span class="pill" style="--pb:var(--amber-bg);--pi:var(--amber-ink);--pl:var(--amber-line)"><span class="dot"></span>Trial scaduto</span><span class="lbl">→ CTA "Riattiva ora", mai una coda vuota silenziosa</span></div>
             <div class="ref-chip"><span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Disattivato</span><span class="lbl">→ messaggio esplicito, CTA "Contatta l'amministratore"</span></div>
           </div>
-          <div class="caption">↑ <b>Active</b> e <b>Trial</b> mostrano dati reali e portano al modulo. <b>Available</b> non ha entitlement: card tratteggiata, nessun dato, CTA di scoperta — non un "0" travestito da dato reale. I due stati aggiuntivi richiesti (<b>Trial scaduto</b>, <b>Disattivato</b>) sono mostrati come riferimento qui sotto invece che su una property che non li ha entrambi contemporaneamente — si vedono per intero nella sezione Modules (03). <b>Nota su questa versione:</b> card e bottoni secondari qui sopra ora usano vetro smerigliato (sfondo translucido + blur), su richiesta — è l'esatto opposto di quanto consigliato in origine per un tool operativo usato per turni interi, quindi lo lascio ben visibile per il confronto: badge e testo restano su sfondo pieno apposta (mai sfocati anche loro), proprio perché è lì che il contrasto conta davvero. <b>Toggle lingua aggiunto</b> in topbar (bandiera IT): mancava, verificato che esiste già in Housekeeping (<code>language-toggle.tsx</code>) con 12 lingue — <code>it, en, fr, de, es, pt, ja, bn, hi, ar, zh, ru</code>, coerente con uno staff spesso non madrelingua italiana. Le bandiere sono disegnate a mano in SVG invece che emoji: nel codice reale è una scelta deliberata, non estetica — l'emoji bandiera si rompe su alcune piattaforme (Windows la mostra come sigla di due lettere). È chrome di shell, quindi la stessa icona vale per ogni topbar del prototipo anche dove non l'ho ridisegnata esplicitamente.</div>
+          <div class="caption">↑ <b>Active</b> e <b>Trial</b> mostrano dati reali e portano al modulo. <b>Available</b> non ha entitlement: card tratteggiata, nessun dato, CTA di scoperta — non un "0" travestito da dato reale. I due stati aggiuntivi richiesti (<b>Trial scaduto</b>, <b>Disattivato</b>) sono mostrati come riferimento qui sotto invece che su una property che non li ha entrambi contemporaneamente — si vedono per intero nella sezione Moduli (03).</div>
+
+          <div style="padding-top:22px;border-top:1.5px dashed var(--line-strong);margin-top:10px;">
+            <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px;">Sotto la piega</div>
+            <h4 style="font-size:15px;font-weight:800;margin-bottom:4px;">Analitica (opzionale)</h4>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Trend e confronti, non azioni operative — per questo restano sotto tutto il resto, mai sopra le informazioni immediate.</div>
+          </div>
+          <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
+            <div class="stat-tile">
+              <div class="lbl-row"><span class="l">Richieste completate</span></div>
+              <div class="v">86</div>
+              <div class="trend up">↑ 12% vs settimana scorsa</div>
+            </div>
+            <div class="stat-tile">
+              <div class="lbl-row"><span class="l">Tempo medio risposta</span></div>
+              <div class="v">18<small>min</small></div>
+              <div class="trend up">↓ 4 min vs settimana scorsa</div>
+            </div>
+            <div class="stat-tile">
+              <div class="lbl-row"><span class="l">Turni coperti</span></div>
+              <div class="v">92<small>%</small></div>
+              <div class="trend flat">Stabile vs settimana scorsa</div>
+            </div>
+          </div>
+          <div class="caption">↑ Solo trend supportati da dati che i moduli forniscono già oggi — nessun grafico decorativo, nessuna metrica inventata. Visibile perché il ruolo di Ana ha una capability tipo <code>analytics.view</code>, non semplicemente perché "Property Admin" è un rank alto: un domani un Manager con quella stessa capability vedrebbe questa sezione, uno senza non la vedrebbe — indipendentemente dal proprio rank. <b>Nota su questa versione:</b> card e bottoni secondari qui sopra usano vetro smerigliato (sfondo translucido + blur) per card riepilogo/KPI, mentre le sezioni operative dense (Richiede attenzione, KPI, in servizio ora) restano su sfondo pieno — vetro per gerarchia/atmosfera, superfici piene per il lavoro. <b>Toggle lingua</b> in topbar (bandiera IT): impostazione di shell, verificato che esiste già in Housekeeping (<code>language-toggle.tsx</code>) con 12 lingue — <code>it, en, fr, de, es, pt, ja, bn, hi, ar, zh, ru</code>. Le bandiere sono disegnate a mano in SVG invece che emoji: nel codice reale è una scelta deliberata, non estetica — l'emoji bandiera si rompe su alcune piattaforme (Windows la mostra come sigla di due lettere).</div>
         </div>
       </div>
     </div>
@@ -1107,8 +1194,8 @@
 
   <div class="proto-label">
     <span class="idx">01c</span>
-    <div class="proto-label-wrap"><h2>Entitlement ≠ permesso — non tutti vedono tutti i moduli</h2>
-    <div class="note">La stessa property, lo stesso momento, un account diverso: la sidebar cambia in base a chi sei, non solo a cosa la property ha acquistato.</div></div>
+    <div class="proto-label-wrap"><h2>Home operativa — "cosa devo fare adesso?"</h2>
+    <div class="note">Non è una dashboard di analisi: per un ruolo operativo, la Home risponde a una domanda sola. Card modulo con un solo stato e una sola CTA, una sezione unica per le eccezioni, niente KPI/grafici/attività generica.</div></div>
   </div>
 
   <div class="frame">
@@ -1119,10 +1206,10 @@
         <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
         <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
+        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span><span class="cnt">Trial</span></a>
         <div class="sb-grp">Piattaforma</div>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/></svg><span class="lbl">Team</span></a>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Settings</span></a>
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">MB</span><span class="info"><span class="n">Marco Bianchi</span><span class="r">Receptionist</span></span></div>
       </nav>
@@ -1131,13 +1218,35 @@
         <div class="content">
           <div class="grid-cards">
             <div class="m-card">
-              <div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></span><span class="nm">RoomCall</span></div>
-              <span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span>
-              <div><div class="stat">7</div><div class="stat-lbl">aperte · 2 urgenti</div></div>
-              <button class="btn btn-primary cta">Apri coda</button>
+              <div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></span><span class="nm">Housekeeping</span></div>
+              <div class="op-status"><span class="dot2" style="background:var(--amber-ink)"></span>3 richieste aperte</div>
+              <button class="btn btn-primary cta">Apri Housekeeping</button>
+            </div>
+            <div class="m-card">
+              <div class="hd"><span class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Turni</span></div>
+              <div class="op-status warn"><span class="dot2" style="background:var(--red-ink)"></span>2 turni scoperti domani</div>
+              <button class="btn btn-primary cta">Apri Turni</button>
+            </div>
+            <div class="m-card ghost">
+              <div class="hd"><span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">Transfer</span></div>
+              <div class="op-status muted">Non attivo</div>
+              <button class="btn btn-secondary cta">Scopri il modulo</button>
             </div>
           </div>
-          <div class="caption">↑ Palazzo Veneziano ha <b>anche</b> Planner Turni in trial (lo vedevi nella sezione 01, come Ana Simone) — ma qui non compare affatto, non tratteggiato, non "Available": semplicemente assente. Marco è Receptionist, il suo ruolo non ha nessun permesso su Planner Turni (<code>role_permissions</code> nel Core, permessi legati al modulo — es. <code>guest_requests.manage</code> già reale nella migrazione di RoomCall). Diverso da <b>Available</b>: quello è "la property non l'ha ancora", questo è "la property ce l'ha, ma non riguarda te" — e non è una decisione che Marco può prendere da solo, quindi non gli si mostra nemmeno un lucchetto su cui cliccare.</div>
+
+          <div class="section-hd" style="margin-top:20px;"><h4>Richiede attenzione</h4></div>
+          <div class="attn-list">
+            <div class="attn-row">
+              <span class="tag" style="background:var(--red-bg);color:var(--red-ink)">Urgente</span>
+              <div class="tx"><b>Camera 305</b> — richiesta Housekeeping in attesa da 12 minuti</div>
+            </div>
+            <div class="attn-row">
+              <span class="tag" style="background:var(--accent-soft);color:var(--accent)">Turni</span>
+              <div class="tx">2 turni scoperti domani — nessuno ancora assegnato</div>
+            </div>
+          </div>
+
+          <div class="caption">↑ Ogni card modulo: un'icona, un nome, <b>un solo</b> stato operativo, <b>una sola</b> CTA — niente pillole di stato duplicate, niente liste secondarie, niente numeri decorativi. "Richiede attenzione" è l'unica sezione cross-modulo: raccoglie solo le eccezioni reali (non ripete "3 richieste aperte" già visibile sulla card). Niente card onboarding qui: configurare moduli/invitare il team richiede <code>core.property.manage</code>, un permesso che Marco non ha — quella sezione non è "nascosta perché già completata", è proprio permission-aware, sparisce per chi non può agire su di essa. <b>Nota sull'entitlement</b>: Turni è in trial ma Marco lo vede perché il suo ruolo ha visibilità sulla copertura turni (coordinamento reception) — se invece il suo ruolo non avesse <i>nessun</i> permesso su un modulo entitled, quella card sparirebbe del tutto (non "Non attivo": proprio assente), diverso da Transfer qui sopra, che è assente per la property, non per il ruolo — <b>Transfer resta scopribile</b> (CTA secondaria, non un lucchetto) proprio perché è un limite di entitlement, non di permesso.</div>
         </div>
       </div>
     </div>
@@ -1164,14 +1273,14 @@
         <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
 
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
-        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Planner Turni</span><span class="cnt">Trial</span></a>
-        <a class="sb-item locked"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
+        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span><span class="cnt">Trial</span></a>
+        <a class="sb-item discover"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span><span class="cnt">+</span></a>
 
         <div class="sb-grp">Piattaforma</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Modules</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Moduli</span></a>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 14.4A4.6 4.6 0 0 1 20.5 19"/></svg><span class="lbl">Team</span></a>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="lbl">Settings</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="lbl">Impostazioni</span></a>
 
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
@@ -1207,7 +1316,7 @@
           </div>
           <div class="grid-cards">
             <div class="m-card">
-              <div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span class="nm">RoomCall</span></div>
+              <div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span class="nm">Housekeeping</span></div>
               <span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span>
               <div class="mini-list">
                 <div class="mi"><span class="dot2" style="background:var(--amber-ink)"></span><span class="tx"><b>306</b> — asciugamani extra</span><span class="tm">45 min</span></div>
@@ -1218,7 +1327,7 @@
               <button class="btn btn-primary cta">Apri coda</button>
             </div>
             <div class="m-card">
-              <div class="hd"><span class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Planner Turni</span></div>
+              <div class="hd"><span class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Turni</span></div>
               <span class="pill" style="--pb:var(--accent-soft);--pi:var(--accent);--pl:var(--accent-soft-line)"><span class="dot"></span>Trial · 9 giorni</span>
               <div class="mini-list">
                 <div class="mi"><span class="dot2" style="background:var(--amber-ink)"></span><span class="tx"><b>Marco B.</b> — ferie</span><span class="tm">dom</span></div>
@@ -1228,7 +1337,7 @@
               <button class="btn btn-primary cta">Apri planner</button>
             </div>
             <div class="m-card ghost">
-              <div class="hd"><span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">FromTo</span></div>
+              <div class="hd"><span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">Transfer</span></div>
               <span class="pill" style="--pb:var(--slate-bg);--pi:var(--slate-ink);--pl:var(--slate-line)"><span class="dot"></span>Available</span>
               <div class="body-txt">Gestisci i transfer aeroportuali e i trasferimenti degli ospiti direttamente da Hotsflow.</div>
               <button class="btn btn-secondary cta">Prova il modulo</button>
@@ -1237,13 +1346,13 @@
         </div>
       </div>
     </div>
-    <div class="caption" style="max-width:100%;">↑ Clicca l'icona <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg> in alto nella sidebar: da 236px a 64px, solo icone, gruppo/etichette/nome property/nome account scompaiono, la voce attiva resta leggibile dal solo sfondo. È chrome di shell, non qualcosa che ogni modulo deve implementare per conto suo: la larghezza recuperata (172px) si vede identica dentro RoomCall, Planner Turni o qualsiasi altro modulo, senza toccarne il codice. In una versione reale lo stato andrebbe ricordato per utente (oggi qui è solo visivo, si resetta al refresh).</div>
+    <div class="caption" style="max-width:100%;">↑ Clicca l'icona <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg> in alto nella sidebar: da 236px a 64px, solo icone, gruppo/etichette/nome property/nome account scompaiono, la voce attiva resta leggibile dal solo sfondo. È chrome di shell, non qualcosa che ogni modulo deve implementare per conto suo: la larghezza recuperata (172px) si vede identica dentro Housekeeping, Turni o qualsiasi altro modulo, senza toccarne il codice. In una versione reale lo stato andrebbe ricordato per utente (oggi qui è solo visivo, si resetta al refresh).</div>
   </div>
 
   <div class="proto-label">
     <span class="idx">01e</span>
     <div class="proto-label-wrap"><h2>Un solo permesso, zero shell</h2>
-    <div class="note">Mario Colombo, facchino: un solo permesso su RoomCall. Niente sidebar, niente property switcher, niente Modules/Team/Settings — non c'è nulla tra cui scegliere, quindi non compare.</div></div>
+    <div class="note">Mario Colombo, facchino: un solo permesso su Housekeeping. Niente sidebar, niente property switcher, niente Moduli/Team/Impostazioni — non c'è nulla tra cui scegliere, quindi non compare.</div></div>
   </div>
 
   <div class="frame">
@@ -1275,7 +1384,7 @@
 
   <div class="proto-label">
     <span class="idx">01f</span>
-    <div class="proto-label-wrap"><h2>RoomCall — viste per ruolo: operatore, admin</h2>
+    <div class="proto-label-wrap"><h2>Housekeeping — viste per ruolo: operatore, admin</h2>
     <div class="note">Ruoli reali verificati in <code>lib/types.ts</code> di Housekeeping: <code>operatore</code>, <code>admin</code>, <code>master</code> — un sistema di ruoli tutto interno al modulo, separato da quello del Core.</div></div>
   </div>
 
@@ -1290,12 +1399,12 @@
             <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
             <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
             <div class="sb-grp">Moduli</div>
-            <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">4</span></a>
+            <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">4</span></a>
             <div class="sb-spacer"></div>
             <div class="sb-account"><span class="av">LR</span><span class="info"><span class="n">Luca Rossi</span><span class="r">Housekeeping</span></span></div>
           </nav>
           <div class="main">
-            <div class="tb"><div><h3>RoomCall</h3><div class="sub">Coda richieste — oggi</div></div></div>
+            <div class="tb"><div><h3>Housekeeping</h3><div class="sub">Coda richieste — oggi</div></div></div>
             <div class="module-subnav">
               <div class="tabs">
                 <a class="active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 3h6l2-3h4"/><path d="M5.5 5h13L21 12v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6L5.5 5Z"/></svg>Richieste</a>
@@ -1329,14 +1438,14 @@
             <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
             <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
             <div class="sb-grp">Moduli</div>
-            <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
+            <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
             <div class="sb-grp">Piattaforma</div>
             <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 14.4A4.6 4.6 0 0 1 20.5 19"/></svg><span class="lbl">Team</span></a>
             <div class="sb-spacer"></div>
             <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
           </nav>
           <div class="main">
-            <div class="tb"><div><h3>RoomCall</h3><div class="sub">Coda richieste — oggi</div></div></div>
+            <div class="tb"><div><h3>Housekeeping</h3><div class="sub">Coda richieste — oggi</div></div></div>
             <div class="module-subnav">
               <div class="tabs">
                 <a class="active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 3h6l2-3h4"/><path d="M5.5 5h13L21 12v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6L5.5 5Z"/></svg>Richieste</a>
@@ -1360,11 +1469,11 @@
           </div>
         </div>
       </div>
-      <div class="caption" style="max-width:100%;">↑ 3 tab (Richieste/Soggiorni/Admin) e coda intera della property, non filtrata per reparto. In "Admin" (dentro RoomCall) l'admin crea nuovi <b>operatori</b> per il proprio hotel — nel codice reale, un form "nuovo operatore", diverso da quello di master.</div>
+      <div class="caption" style="max-width:100%;">↑ 3 tab (Richieste/Soggiorni/Admin) e coda intera della property, non filtrata per reparto. In "Admin" (dentro Housekeeping) l'admin crea nuovi <b>operatori</b> per il proprio hotel — nel codice reale, un form "nuovo operatore", diverso da quello di master.</div>
     </div>
   </div>
 
-  <div class="caption" style="max-width:100%;margin-top:4px;padding-top:14px;border-top:1px dashed var(--line-strong);">↑ <b>E "master"?</b> Non lo mostro come terza dashboard, di proposito. Verificato in <code>lib/types.ts</code>: <i>"master isn't scoped to one hotel: it creates hotel admins"</i> — opera su <b>tutti</b> gli hotel dell'installazione RoomCall, non su una property o una organization. Non ha un equivalente nel Core: <code>organization_admin</code> resta comunque dentro <b>una</b> organization, mai attraverso organization diverse. È lo stesso identico problema già risolto per il fornitore di FromTo (§M4): un ruolo che non appartiene a nessun hotel specifico non entra nella shell — resta uno strumento operativo separato, non una quarta voce nel menu ruoli di Team. Da trattare come decisione architetturale a sé, non come un dettaglio della UI.</div>
+  <div class="caption" style="max-width:100%;margin-top:4px;padding-top:14px;border-top:1px dashed var(--line-strong);">↑ <b>E "master"?</b> Non lo mostro come terza dashboard, di proposito. Verificato in <code>lib/types.ts</code>: <i>"master isn't scoped to one hotel: it creates hotel admins"</i> — opera su <b>tutti</b> gli hotel dell'installazione Housekeeping, non su una property o una organization. Non ha un equivalente nel Core: <code>organization_admin</code> resta comunque dentro <b>una</b> organization, mai attraverso organization diverse. È lo stesso identico problema già risolto per il fornitore di Transfer (§M4): un ruolo che non appartiene a nessun hotel specifico non entra nella shell — resta uno strumento operativo separato, non una quarta voce nel menu ruoli di Team. Da trattare come decisione architetturale a sé, non come un dettaglio della UI.</div>
 
   <div class="proto-label">
     <span class="idx">02</span>
@@ -1384,9 +1493,9 @@
         </button>
         <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">3</span></a>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Planner Turni</span></a>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">3</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span></a>
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">HD</span><span class="info"><span class="n">Ospite demo</span><span class="r">Esplorazione</span></span></div>
       </nav>
@@ -1399,9 +1508,9 @@
             <button class="btn btn-primary">Configura il tuo hotel</button>
           </div>
           <div class="grid-cards">
-            <div class="m-card"><div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span class="nm">RoomCall</span></div><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span><div><div class="stat">3</div><div class="stat-lbl">richieste di esempio</div></div><button class="btn btn-primary cta">Esplora la coda</button></div>
-            <div class="m-card"><div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Planner Turni</span></div><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span><div><div class="stat">0</div><div class="stat-lbl">assenze di esempio</div></div><button class="btn btn-primary cta">Esplora il planner</button></div>
-            <div class="m-card"><div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">FromTo</span></div><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span><div><div class="stat">2</div><div class="stat-lbl">partenze di esempio oggi</div></div><button class="btn btn-primary cta">Esplora i transfer</button></div>
+            <div class="m-card"><div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span class="nm">Housekeeping</span></div><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span><div><div class="stat">3</div><div class="stat-lbl">richieste di esempio</div></div><button class="btn btn-primary cta">Esplora la coda</button></div>
+            <div class="m-card"><div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm">Turni</span></div><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span><div><div class="stat">0</div><div class="stat-lbl">assenze di esempio</div></div><button class="btn btn-primary cta">Esplora il planner</button></div>
+            <div class="m-card"><div class="hd"><span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="nm">Transfer</span></div><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span><div><div class="stat">2</div><div class="stat-lbl">partenze di esempio oggi</div></div><button class="btn btn-primary cta">Esplora i transfer</button></div>
           </div>
           <div class="caption">↑ In demo tutti i moduli sono <b>active</b> per definizione (nessun entitlement reale da rispettare) — la distinzione con la produzione la fa solo il banner e il badge "dati di esempio" sulle card, mai un colore diverso: il sistema di stato dei moduli resta identico dentro e fuori dalla demo.</div>
         </div>
@@ -1411,8 +1520,8 @@
 
   <div class="proto-label">
     <span class="idx">03</span>
-    <div class="proto-label-wrap"><h2>Modules — catalogo</h2>
-    <div class="note">Discovery, activation, stato — tutti e quattro gli stati richiesti, sulla stessa pagina.</div></div>
+    <div class="proto-label-wrap"><h2>Moduli — catalogo</h2>
+    <div class="note">Discovery, activation, stato. <b>Active</b>/<b>Trial</b>/<b>Available</b> sono tre trattamenti visivi distinti, non "attivo vs bloccato": Available è scopribile (vedi anche la sidebar qui a sinistra — non più "locked" e attenuato, ora un +) mentre <b>Disattivato</b> comunica un'altra cosa ancora (azione di un admin, non assenza di acquisto). Il quarto stato, "nessun accesso" per permesso mancante, non vive qui: è un caso di destinazione raggiunta senza permesso, vedi gli stati di sistema più avanti.</div></div>
   </div>
 
   <div class="frame">
@@ -1423,29 +1532,29 @@
         <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
-        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Planner Turni</span><span class="cnt">Trial</span></a>
-        <a class="sb-item locked"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
+        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span><span class="cnt">Trial</span></a>
+        <a class="sb-item discover"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span><span class="cnt">+</span></a>
         <div class="sb-grp">Piattaforma</div>
-        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Modules</span></a>
+        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Moduli</span></a>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 14.4A4.6 4.6 0 0 1 20.5 19"/></svg><span class="lbl">Team</span></a>
-        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="lbl">Settings</span></a>
+        <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="lbl">Impostazioni</span></a>
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
       </nav>
       <div class="main">
-        <div class="tb"><div><h3>Modules</h3><div class="sub">Catalogo moduli Hotsflow per Palazzo Veneziano</div></div></div>
+        <div class="tb"><div><h3>Moduli</h3><div class="sub">Catalogo moduli Hotsflow per Palazzo Veneziano</div></div></div>
         <div class="content content-narrow">
           <div class="tbl-wrap">
             <div class="cat-row">
               <span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
-              <div class="info"><div class="n">RoomCall</div><div class="d">Richieste ospiti, housekeeping, manutenzione</div></div>
+              <div class="info"><div class="n">Housekeeping</div><div class="d">Richieste ospiti, housekeeping, manutenzione</div></div>
               <span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line)"><span class="dot"></span>Active</span>
               <button class="btn btn-secondary">Apri</button>
             </div>
             <div class="cat-row">
               <span class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span>
-              <div class="info"><div class="n">Planner Turni</div><div class="d">Pianificazione turni, richieste, copertura</div></div>
+              <div class="info"><div class="n">Turni</div><div class="d">Pianificazione turni, richieste, copertura</div></div>
               <span class="pill" style="--pb:var(--accent-soft);--pi:var(--accent);--pl:var(--accent-soft-line)"><span class="dot"></span>Trial · 9 giorni</span>
               <button class="btn btn-secondary">Apri</button>
             </div>
@@ -1457,25 +1566,25 @@
             </div>
             <div class="cat-row">
               <span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
-              <div class="info"><div class="n">FromTo</div><div class="d">Transfer aeroportuali e trasferimenti ospiti</div></div>
+              <div class="info"><div class="n">Transfer</div><div class="d">Transfer aeroportuali e trasferimenti ospiti</div></div>
               <span class="pill" style="--pb:var(--slate-bg);--pi:var(--slate-ink);--pl:var(--slate-line)"><span class="dot"></span>Available</span>
               <button class="btn btn-secondary">Prova il modulo</button>
             </div>
             <div class="cat-row">
               <span class="ic" style="background:var(--red-bg);color:var(--red-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg></span>
-              <div class="info"><div class="n">FromTo <span style="color:var(--muted);font-weight:600">(esempio — se disattivato invece che available)</span></div><div class="d">Disattivato dall'amministratore il 12 agosto</div></div>
+              <div class="info"><div class="n">Transfer <span style="color:var(--muted);font-weight:600">(esempio — se disattivato invece che available)</span></div><div class="d">Disattivato dall'amministratore il 12 agosto</div></div>
               <span class="pill" style="--pb:var(--red-bg);--pi:var(--red-ink);--pl:var(--red-line)"><span class="dot"></span>Disattivato</span>
               <button class="btn btn-ghost" disabled>Contatta l'amministratore</button>
             </div>
           </div>
-          <div class="caption">↑ Nessun billing reale implementato: "Riattiva" e "Prova il modulo" oggi aprono un pannello placeholder esplicito ("in arrivo"), mai un checkout finto. La riga segnata "(esempio)" riusa un modulo vero (FromTo) solo per mostrare come si comporterebbe visivamente lo stato Disattivato — non è un quarto modulo reale, e FromTo oggi è "Available", non disattivato.</div>
+          <div class="caption">↑ Nessun billing reale implementato: "Riattiva" e "Prova il modulo" oggi aprono un pannello placeholder esplicito ("in arrivo"), mai un checkout finto. La riga segnata "(esempio)" riusa un modulo vero (Transfer) solo per mostrare come si comporterebbe visivamente lo stato Disattivato — non è un quarto modulo reale, e Transfer oggi è "Available", non disattivato.</div>
 
-          <div class="section-hd" style="margin-top:26px;"><h4>E il fornitore — la compagnia taxi di FromTo?</h4></div>
+          <div class="section-hd" style="margin-top:26px;"><h4>E il fornitore — la compagnia taxi di Transfer?</h4></div>
           <div class="vendor-card">
             <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm14 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/><path d="M3 17V9a2 2 0 0 1 2-2h9l4 4v6"/></svg></span>
             <div>
               <h4>Resta fuori dalla shell, di proposito</h4>
-              <p>Un ospite di Hotsflow è un <b>hotel</b>: property, membership, ruoli, "Team" — tutto quello che vedi qui — descrive lo staff dell'hotel. FromTo però ha anche un secondo tipo di account che non appartiene a nessun hotel: la <b>compagnia taxi</b> (<code>TaxiCompany</code>) e i suoi <b>autisti</b> (<code>Driver</code>), verificato nell'audit tecnico. Per decisione già presa in <code>hotsflow-core</code> (§M4), questi login <b>non entrano nel Core condiviso</b> — restano esattamente come sono oggi in FromTo, un login/portale separato, fuori da <span class="mono">app.hotsflow.com</span>. Non li vedrai mai nella sidebar, in Team o nel property selector: un autista non ha una property, ha delle corse assegnate. Se un giorno servisse dar loro un'esperienza più curata, sarebbe un portale a parte con la stessa identità visiva — non un accesso alla shell.</p>
+              <p>Un ospite di Hotsflow è un <b>hotel</b>: property, membership, ruoli, "Team" — tutto quello che vedi qui — descrive lo staff dell'hotel. Transfer però ha anche un secondo tipo di account che non appartiene a nessun hotel: la <b>compagnia taxi</b> (<code>TaxiCompany</code>) e i suoi <b>autisti</b> (<code>Driver</code>), verificato nell'audit tecnico. Per decisione già presa in <code>hotsflow-core</code> (§M4), questi login <b>non entrano nel Core condiviso</b> — restano esattamente come sono oggi in Transfer, un login/portale separato, fuori da <span class="mono">app.hotsflow.com</span>. Non li vedrai mai nella sidebar, in Team o nel property selector: un autista non ha una property, ha delle corse assegnate. Se un giorno servisse dar loro un'esperienza più curata, sarebbe un portale a parte con la stessa identità visiva — non un accesso alla shell.</p>
             </div>
           </div>
         </div>
@@ -1513,7 +1622,7 @@
         <div class="opt disabled"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg><div><div>Rimuovi definitivamente</div><div class="sub">Non ancora disponibile</div></div></div>
       </div>
       <div class="caption" style="max-width:100%;">↑ <b>Modificare</b> è reale oggi: cambiare ruolo passa da <code>assign_membership_role()</code> (stesso vincolo di gerarchia dell'invito — non puoi assegnare un ruolo superiore al tuo), sospendere scrive sulla colonna <code>status</code> di <code>memberships</code>, che il Core concede in scrittura ad <code>authenticated</code> proprio per questo. <b>Eliminare in modo definitivo no</b>: non ho trovato nel Core una policy che permetta a <code>authenticated</code> di cancellare una riga <code>memberships</code> (né tantomeno il <code>profiles</code> della persona, condiviso fra tutte le sue property) — è coerente con quanto già scoperto per <code>property_modules</code> e i ruoli: le operazioni strutturalmente sensibili restano service-role only. "Sospendi" è la rimozione reale disponibile oggi: l'accesso si blocca subito, la storia resta (<code>audit_logs</code> registra <code>membership.suspended</code>), e si può riattivare. Un vero "elimina" richiederebbe una decisione nuova nel Core, non solo un bottone in più qui.</div>
-      <div class="section-hd"><h4>Dettagli operativi — RoomCall</h4></div>
+      <div class="section-hd"><h4>Dettagli operativi — Housekeeping</h4></div>
       <div class="tbl-wrap">
         <table class="dt">
           <thead><tr><th>Membro</th><th>Reparto</th></tr></thead>
@@ -1523,7 +1632,7 @@
           </tbody>
         </table>
       </div>
-      <div class="caption">↑ "Reparto" resta un dato module-local di RoomCall — visibile qui in una sezione dedicata, non riscritto sopra il ruolo Core. <b>staff_profiles.role</b> non torna mai a essere la fonte autoritativa: il ruolo mostrato in alto viene da <b>memberships</b>.</div>
+      <div class="caption">↑ "Reparto" resta un dato module-local di Housekeeping — visibile qui in una sezione dedicata, non riscritto sopra il ruolo Core. <b>staff_profiles.role</b> non torna mai a essere la fonte autoritativa: il ruolo mostrato in alto viene da <b>memberships</b>.</div>
     </div>
   </div>
 
@@ -1552,7 +1661,7 @@
   <div class="content-narrow" style="margin:0 auto;">
   <div class="tbl-wrap">
     <table class="dt">
-      <thead><tr><th>Ruolo Core</th><th>RoomCall</th><th>Planner Turni</th><th>FromTo</th></tr></thead>
+      <thead><tr><th>Ruolo Core</th><th>Housekeeping</th><th>Turni</th><th>Transfer</th></tr></thead>
       <tbody>
         <tr>
           <td><b>Receptionist</b><br><span style="color:var(--muted);font-size:11px;font-weight:400;">rank 10</span></td>
@@ -1581,7 +1690,7 @@
       </tbody>
     </table>
   </div>
-  <div class="caption" style="max-width:100%;">↑ Solo 2 ruoli su 4 hanno oggi un equivalente plausibile in ciascun modulo — e anche quei due (Receptionist↔Operatore/Dipendente/Staff, Property Admin↔Admin) sono una corrispondenza <b>provvisoria</b>, non una decisione presa: nessuno dei tre repository sa oggi cosa sia un "ruolo Core", perché nessuno legge ancora da <code>memberships</code>/<code>role_permissions</code> — ciascuno controlla la propria colonna locale (<code>profile.role</code>, <code>isAdmin</code>, <code>isOrgAdmin</code>). <b>Manager e Organization Admin non hanno alcun equivalente in nessun modulo</b>: se oggi un Organization Admin del Core aprisse RoomCall, il suo codice non saprebbe cosa farne — vedrebbe probabilmente la vista più bassa (operatore), non quella più alta, semplicemente perché non esiste un terzo/quarto stato da assegnargli. Colmare questa distanza è lavoro di migrazione reale per ciascun modulo (riscrivere i controlli <code>role === 'admin'</code> in chiamate del tipo <code>hasPermission()</code> contro il Core), non una scelta di UI. <b>"Master" di RoomCall resta fuori da questa tabella di proposito</b>: non è "più" di Organization Admin sulla stessa scala — è un asse diverso, cross-organization e non solo cross-property (vedi 01f) — incastrarlo in una riga qui sopra sarebbe scorretto quanto ometterlo.</div>
+  <div class="caption" style="max-width:100%;">↑ Solo 2 ruoli su 4 hanno oggi un equivalente plausibile in ciascun modulo — e anche quei due (Receptionist↔Operatore/Dipendente/Staff, Property Admin↔Admin) sono una corrispondenza <b>provvisoria</b>, non una decisione presa: nessuno dei tre repository sa oggi cosa sia un "ruolo Core", perché nessuno legge ancora da <code>memberships</code>/<code>role_permissions</code> — ciascuno controlla la propria colonna locale (<code>profile.role</code>, <code>isAdmin</code>, <code>isOrgAdmin</code>). <b>Manager e Organization Admin non hanno alcun equivalente in nessun modulo</b>: se oggi un Organization Admin del Core aprisse Housekeeping, il suo codice non saprebbe cosa farne — vedrebbe probabilmente la vista più bassa (operatore), non quella più alta, semplicemente perché non esiste un terzo/quarto stato da assegnargli. Colmare questa distanza è lavoro di migrazione reale per ciascun modulo (riscrivere i controlli <code>role === 'admin'</code> in chiamate del tipo <code>hasPermission()</code> contro il Core), non una scelta di UI. <b>"Master" di Housekeeping resta fuori da questa tabella di proposito</b>: non è "più" di Organization Admin sulla stessa scala — è un asse diverso, cross-organization e non solo cross-property (vedi 01f) — incastrarlo in una riga qui sopra sarebbe scorretto quanto ometterlo.</div>
   </div>
 
   <div class="proto-label">
@@ -1601,7 +1710,7 @@
           <div class="ob-row done"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><div class="t"><div class="n">Informazioni struttura</div><div class="d">Nome, indirizzo, fuso orario</div></div></div>
           <div class="ob-row done"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span><div class="t"><div class="n">Camere</div><div class="d">42 camere importate</div></div></div>
           <div class="ob-row current"><span class="ck">3</span><div class="t"><div class="n">Invita il team</div><div class="d">Aggiungi almeno un altro membro dello staff</div></div><svg class="chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
-          <div class="ob-row todo"><span class="ck"></span><div class="t"><div class="n">Configura RoomCall</div><div class="d">Categorie di richiesta, reparti</div></div></div>
+          <div class="ob-row todo"><span class="ck"></span><div class="t"><div class="n">Configura Housekeeping</div><div class="d">Categorie di richiesta, reparti</div></div></div>
           <div class="ob-row todo"><span class="ck"></span><div class="t"><div class="n">Attiva notifiche</div><div class="d">Email e push per il tuo team</div></div></div>
         </div>
       </div>
@@ -1611,7 +1720,7 @@
 
   <div class="proto-label">
     <span class="idx">06</span>
-    <div class="proto-label-wrap"><h2>Un modulo dentro la shell — RoomCall</h2>
+    <div class="proto-label-wrap"><h2>Un modulo dentro la shell — Housekeeping</h2>
     <div class="note">La tabella richieste non cambia. La navbar propria del modulo sì: quello che duplica la shell sparisce, quello che è reale navigazione interna resta come sotto-barra.</div></div>
   </div>
 
@@ -1623,14 +1732,14 @@
         <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
-        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Planner Turni</span><span class="cnt">Trial</span></a>
-        <a class="sb-item locked"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
+        <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span><span class="cnt">Trial</span></a>
+        <a class="sb-item discover"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span><span class="cnt">+</span></a>
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
       </nav>
       <div class="main">
-        <div class="tb"><div><h3>RoomCall</h3><div class="sub">Coda richieste — oggi</div></div></div>
+        <div class="tb"><div><h3>Housekeeping</h3><div class="sub">Coda richieste — oggi</div></div></div>
         <div class="module-subnav">
           <div class="tabs">
             <a class="active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 3h6l2-3h4"/><path d="M5.5 5h13L21 12v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6L5.5 5Z"/></svg>Richieste</a>
@@ -1650,7 +1759,7 @@
               </tbody>
             </table>
           </div>
-          <div class="caption">↑ Nessuna riga di questa tabella è cambiata rispetto a Housekeeping oggi — badge, densità, colonne <span class="mono">font-data</span> a destra sono già lo stesso componente. <b>Nome corretto in questa versione:</b> lo chiamavo genericamente "Guest Requests" nelle bozze precedenti — verificato ora nel codice di Housekeeping (<code>components/logo.tsx</code>, header staff <i>e</i> header ospite), il prodotto si chiama <b>RoomCall</b> in entrambi i contesti. <b>La sotto-barra qui sopra</b> è la navbar propria di RoomCall (verificata in <code>dashboard-header.tsx</code>), non inventata: nel prodotto reale contiene anche brand, account e logout, che qui spariscono perché la shell li possiede già — restano solo i 3 link di navigazione interna (Richieste/Soggiorni/Admin, con lo stesso gating per ruolo di oggi: Soggiorni solo reception/admin, Admin solo ruoli admin) e il toggle "in servizio", che è un'azione frequente durante il turno e non un'impostazione da nascondere in un menu. Lingua sparisce dalla sua navbar per un motivo preciso, non solo perché ridondante: diventa un'impostazione di shell (il toggle in topbar, sezione 01), unica per tutti i moduli — non ha senso scegliere una lingua diversa per ogni modulo che apri nella stessa sessione. Dimensione testo/notifiche del modulo, invece, restano scelte specifiche di RoomCall: diventano voci in Settings → Moduli → RoomCall, non spariscono e non salgono a livello di shell.</div>
+          <div class="caption">↑ Nessuna riga di questa tabella è cambiata rispetto a Housekeeping oggi — badge, densità, colonne <span class="mono">font-data</span> a destra sono già lo stesso componente. <b>Nome deliberatamente generico:</b> il prodotto reale (verificato in <code>components/logo.tsx</code>, header staff <i>e</i> header ospite) si chiama internamente "RoomCall" — ma Hotsflow è l'unico brand di prodotto della suite, i moduli non hanno un nome indipendente: qui è "Housekeeping" ovunque, coerente con Turni/Transfer. <b>La sotto-barra qui sopra</b> è la navbar propria del modulo (verificata in <code>dashboard-header.tsx</code>), non inventata: nel prodotto reale contiene anche brand, account e logout, che qui spariscono perché la shell li possiede già — restano solo i 3 link di navigazione interna (Richieste/Soggiorni/Admin, con lo stesso gating per ruolo di oggi: Soggiorni solo reception/admin, Admin solo ruoli admin) e il toggle "in servizio", che è un'azione frequente durante il turno e non un'impostazione da nascondere in un menu. Lingua sparisce dalla sua navbar per un motivo preciso, non solo perché ridondante: diventa un'impostazione di shell (il toggle in topbar, sezione 01), unica per tutti i moduli — non ha senso scegliere una lingua diversa per ogni modulo che apri nella stessa sessione. Dimensione testo/notifiche del modulo, invece, restano scelte specifiche di Housekeeping: diventano voci in Impostazioni → Moduli → Housekeeping, non spariscono e non salgono a livello di shell.</div>
         </div>
       </div>
     </div>
@@ -1658,8 +1767,8 @@
 
   <div class="proto-label">
     <span class="idx">06b</span>
-    <div class="proto-label-wrap"><h2>FromTo dentro la shell — stesso trattamento di RoomCall</h2>
-    <div class="note">Lo stile della shell si applica ai moduli della suite: stessa sotto-barra minimale, stessa logica, anche se FromTo ha più tab da mostrare.</div></div>
+    <div class="proto-label-wrap"><h2>Transfer dentro la shell — stesso trattamento di Housekeeping</h2>
+    <div class="note">Lo stile della shell si applica ai moduli della suite: stessa sotto-barra minimale, stessa logica, anche se Transfer ha più tab da mostrare.</div></div>
   </div>
 
   <div class="frame">
@@ -1670,12 +1779,12 @@
         <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span></a>
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
       </nav>
       <div class="main">
-        <div class="tb"><div><h3>FromTo</h3><div class="sub">Transfer aeroportuali — oggi</div></div></div>
+        <div class="tb"><div><h3>Transfer</h3><div class="sub">Transfer aeroportuali — oggi</div></div></div>
         <div class="module-subnav">
           <div class="tabs">
             <a class="active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M3 8l3.6-4.8A2 2 0 0 1 8.2 2h7.6a2 2 0 0 1 1.6 1.2L21 8"/><path d="M3 8h18"/><path d="M9 12a3 3 0 0 0 6 0"/></svg>Richieste</a>
@@ -1695,7 +1804,7 @@
               </tbody>
             </table>
           </div>
-          <div class="caption">↑ 5 tab (Richieste/Transfer/Tratte/Contabilità/Team, verificate in <code>app/hotel/layout.tsx</code> — Contabilità e Team solo per <code>isOrgAdmin</code>) stanno comunque nella stessa sotto-barra minimale usata per RoomCall, senza bisogno di più spazio: è lo stile di shell applicato senza eccezioni, come richiesto. Nel prodotto reale questi stessi 5 link vivono in un'unica pillola col brand "FromTo", account e logout — qui spariscono per lo stesso motivo di RoomCall. Il toggle lingua della dashboard reale di FromTo (in realtà: dimensione testo, non lingua — verificato in <code>dashboard-shell.tsx</code>, il selettore lingua lì esiste solo sulle pagine pubbliche ospite/autista) diventerebbe comunque una voce in Settings → Moduli → FromTo, non uno stato a parte.</div>
+          <div class="caption">↑ 5 tab (Richieste/Transfer/Tratte/Contabilità/Team, verificate in <code>app/hotel/layout.tsx</code> — Contabilità e Team solo per <code>isOrgAdmin</code>) stanno comunque nella stessa sotto-barra minimale usata per Housekeeping, senza bisogno di più spazio: è lo stile di shell applicato senza eccezioni, come richiesto. Nel prodotto reale questi stessi 5 link vivono in un'unica pillola col brand interno "FromTo", account e logout — qui diventa genericamente "Transfer" (Hotsflow è l'unico brand di prodotto, i moduli non hanno un nome proprio) e brand/account/logout spariscono per lo stesso motivo di Housekeeping. Il toggle lingua della dashboard reale di Transfer (in realtà: dimensione testo, non lingua — verificato in <code>dashboard-shell.tsx</code>, il selettore lingua lì esiste solo sulle pagine pubbliche ospite/autista) diventerebbe comunque una voce in Impostazioni → Moduli → Transfer, non uno stato a parte.</div>
         </div>
       </div>
     </div>
@@ -1703,7 +1812,7 @@
 
   <div class="proto-label">
     <span class="idx">06c</span>
-    <div class="proto-label-wrap"><h2>Planner Turni dentro la shell — più autonomia</h2>
+    <div class="proto-label-wrap"><h2>Turni dentro la shell — più autonomia</h2>
     <div class="note">Stesso principio, applicato con più libertà: 7 destinazioni reali e un'identità visiva propria che non ha senso comprimere in 3 pillole.</div></div>
   </div>
 
@@ -1715,12 +1824,12 @@
         <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
         <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
         <div class="sb-grp">Moduli</div>
-        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Planner Turni</span></a>
+        <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg><span class="lbl">Turni</span></a>
         <div class="sb-spacer"></div>
         <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
       </nav>
       <div class="main">
-        <div class="tb"><div><h3>Planner Turni</h3><div class="sub">Ciao, Ana — Reception · settembre 2026</div></div></div>
+        <div class="tb"><div><h3>Turni</h3><div class="sub">Ciao, Ana — Reception · settembre 2026</div></div></div>
         <div class="module-subnav" style="flex-wrap:wrap;">
           <div class="tabs">
             <a class="active">Calendario</a>
@@ -1742,7 +1851,7 @@
               </tbody>
             </table>
           </div>
-          <div class="caption">↑ 7 destinazioni reali (verificate in <code>PlannerTurni.jsx</code>: Calendario, I miei turni, Dipendenti/Regole copertura solo Admin, Le mie preferenze, Cambi turno, Ferie/Permessi, Pre-assegnazioni — qui ne mostro 7 su 7 perché Ana è Admin) non ci stanno in 3 pillole senza diventare illeggibili: vanno a capo, ed è corretto così — comprimerle forzatamente sarebbe peggio che lasciarle native. Ho tenuto anche il saluto "Ciao, Ana" nel sottotitolo della topbar, lo stesso che Planner Turni mostra oggi da solo: qui non tolgo nulla che non sia già duplicato dalla shell (non ha un blocco account+logout proprio da rimuovere, ha già solo campanella e ingranaggio, entrambi module-local e legittimi da tenere). Non è un'eccezione per compiacere il prodotto: è la differenza reale tra un modulo con 3 destinazioni e uno con 7, più uno tecnicamente meno maturo (nessun concetto di property/multi-tenant nel suo codice oggi) — comprimerlo oggi vorrebbe dire inventare una gerarchia che il modulo stesso non ha ancora.</div>
+          <div class="caption">↑ 7 destinazioni reali (verificate in <code>PlannerTurni.jsx</code>: Calendario, I miei turni, Dipendenti/Regole copertura solo Admin, Le mie preferenze, Cambi turno, Ferie/Permessi, Pre-assegnazioni — qui ne mostro 7 su 7 perché Ana è Admin) non ci stanno in 3 pillole senza diventare illeggibili: vanno a capo, ed è corretto così — comprimerle forzatamente sarebbe peggio che lasciarle native. Ho tenuto anche il saluto "Ciao, Ana" nel sottotitolo della topbar, lo stesso che Turni mostra oggi da solo: qui non tolgo nulla che non sia già duplicato dalla shell (non ha un blocco account+logout proprio da rimuovere, ha già solo campanella e ingranaggio, entrambi module-local e legittimi da tenere). Non è un'eccezione per compiacere il prodotto: è la differenza reale tra un modulo con 3 destinazioni e uno con 7, più uno tecnicamente meno maturo (nessun concetto di property/multi-tenant nel suo codice oggi) — comprimerlo oggi vorrebbe dire inventare una gerarchia che il modulo stesso non ha ancora.</div>
         </div>
       </div>
     </div>
@@ -1761,22 +1870,22 @@
         <div class="m-content">
           <div class="demo-banner" style="margin-bottom:14px;padding:10px 12px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="t" style="font-size:11.5px;">Palazzo Veneziano</span></div>
           <div class="m-cards">
-            <div class="m-card" style="padding:15px 16px;"><div class="hd"><span class="ic" style="width:32px;height:32px;background:var(--green-bg);color:var(--green-ink)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></span><span class="nm" style="font-size:13px;">RoomCall</span></div><div style="display:flex;align-items:baseline;gap:8px;"><span class="stat" style="font-size:19px;">7</span><span class="stat-lbl" style="margin-top:0;font-size:11px;">aperte</span></div></div>
-            <div class="m-card" style="padding:15px 16px;"><div class="hd"><span class="ic" style="width:32px;height:32px;background:var(--accent-soft);color:var(--accent)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm" style="font-size:13px;">Planner Turni</span><span class="pill" style="--pb:var(--accent-soft);--pi:var(--accent);--pl:var(--accent-soft-line);font-size:9px;padding:2px 7px;">Trial</span></div><div style="display:flex;align-items:baseline;gap:8px;"><span class="stat" style="font-size:19px;">2</span><span class="stat-lbl" style="margin-top:0;font-size:11px;">assenze domani</span></div></div>
+            <div class="m-card" style="padding:15px 16px;"><div class="hd"><span class="ic" style="width:32px;height:32px;background:var(--green-bg);color:var(--green-ink)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg></span><span class="nm" style="font-size:13px;">Housekeeping</span></div><div style="display:flex;align-items:baseline;gap:8px;"><span class="stat" style="font-size:19px;">7</span><span class="stat-lbl" style="margin-top:0;font-size:11px;">aperte</span></div></div>
+            <div class="m-card" style="padding:15px 16px;"><div class="hd"><span class="ic" style="width:32px;height:32px;background:var(--accent-soft);color:var(--accent)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg></span><span class="nm" style="font-size:13px;">Turni</span><span class="pill" style="--pb:var(--accent-soft);--pi:var(--accent);--pl:var(--accent-soft-line);font-size:9px;padding:2px 7px;">Trial</span></div><div style="display:flex;align-items:baseline;gap:8px;"><span class="stat" style="font-size:19px;">2</span><span class="stat-lbl" style="margin-top:0;font-size:11px;">assenze domani</span></div></div>
           </div>
         </div>
         <div class="m-bottomnav">
           <div class="it active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>Home</div>
-          <div class="it"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Modules</div>
+          <div class="it"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Moduli</div>
           <div class="it"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/></svg>Team</div>
           <div class="it"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>Altro</div>
         </div>
       </div>
     </div>
     <div class="caption" style="max-width:420px;">
-      <b>Sidebar → drawer.</b> Sotto i 640px la sidebar scompare: brand + pagina corrente in una topbar minima, hamburger apre un drawer con tutti i moduli/Modules/Team/Settings — stesso pattern già in uso in Housekeeping e Transfer.<br><br>
+      <b>Sidebar → drawer.</b> Sotto i 640px la sidebar scompare: brand + pagina corrente in una topbar minima, hamburger apre un drawer con tutte le destinazioni (moduli attivi, Moduli/Team/Impostazioni) — stesso pattern già in uso in Housekeeping e Transfer.<br><br>
       <b>Property selector</b> si sposta dentro il drawer quando c'è più di una property; con una sola resta solo testo, non cliccabile (nessuna freccia) — coerente con la regola già in uso nei moduli esistenti.<br><br>
-      <b>Bottom nav</b> per le 2-3 destinazioni più frequenti (Home, Modules, Team) è un'aggiunta di questa shell, non presente nei moduli oggi. Soluzione proposta al problema "i moduli devono restare agevoli da usare": esiste solo qui, alle destinazioni di shell — appena apri un modulo sparisce, vedi 07c qui sotto.
+      <b>Bottom nav</b> per le 2-3 destinazioni più frequenti (Home, Moduli, Team) è un'aggiunta di questa shell, non presente nei moduli oggi. Soluzione proposta al problema "i moduli devono restare agevoli da usare": esiste solo qui, alle destinazioni di shell — appena apri un modulo sparisce, vedi 07c qui sotto.
     </div>
   </div>
 
@@ -1793,57 +1902,116 @@
       <button class="sb-prop"><span class="mk">PV</span><span class="info"><span class="n">Palazzo Veneziano</span><span class="t">Venezia</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l4 4 4-4"/><path d="M8 15l4-4 4 4"/></svg></button>
       <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
       <div class="sb-grp">Moduli</div>
-      <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg><span class="lbl">RoomCall</span><span class="cnt">7</span></a>
-      <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span class="lbl">Planner Turni</span><span class="cnt">Trial</span></a>
-      <a class="sb-item locked"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">FromTo</span></a>
+      <a class="sb-item active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/></svg><span class="lbl">Housekeeping</span><span class="cnt">7</span></a>
+      <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span class="lbl">Turni</span><span class="cnt">Trial</span></a>
+      <a class="sb-item discover"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span><span class="cnt">+</span></a>
       <div class="sb-grp">Piattaforma</div>
-      <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Modules</span></a>
+      <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span class="lbl">Moduli</span></a>
       <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/></svg><span class="lbl">Team</span></a>
-      <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Settings</span></a>
+      <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Impostazioni</span></a>
       <div class="sb-spacer"></div>
       <div class="sb-account"><span class="av">AS</span><span class="info"><span class="n">Ana Simone</span><span class="r">Property Admin</span></span></div>
     </div>
-    <div class="m-tb" style="filter:brightness(.7)"><span class="mk">H</span><span class="cur">RoomCall</span><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span></div>
+    <div class="m-tb" style="filter:brightness(.7)"><span class="mk">H</span><span class="cur">Housekeeping</span><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span></div>
     <div class="m-content" style="filter:brightness(.7);min-height:280px;"></div>
   </div>
   <div class="caption">↑ Stesso contenuto della sidebar desktop, solo impilato verticalmente — nessuna voce persa nel passaggio a mobile. Il property selector resta in cima al drawer, non altrove.</div>
 
   <div class="proto-label">
     <span class="idx">07c</span>
-    <div class="proto-label-wrap"><h2>Mobile — dentro un modulo, niente bottom nav</h2>
-    <div class="note">La soluzione proposta: la bottom nav esiste solo alle destinazioni di shell, sparisce appena apri RoomCall o un altro modulo.</div></div>
+    <div class="proto-label-wrap"><h2>Mobile — dentro Housekeeping: tab primarie, filtri, niente bottom nav</h2>
+    <div class="note">Tre livelli distinti impilati, mai confusi: navigazione di modulo (Richieste/Camere), filtro di schermata (Tutte/Da fare/In corso), lista. La bottom nav di shell sparisce del tutto.</div></div>
   </div>
 
   <div class="cols2">
     <div>
       <div class="phone">
-        <div class="m-tb"><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span><span class="cur">RoomCall</span><span class="hb"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
-        <div class="module-subnav mobile">
-          <div class="tabs">
-            <a class="active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 3h6l2-3h4"/><path d="M5.5 5h13L21 12v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6L5.5 5Z"/></svg></a>
-            <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-7a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7M3 18v2M21 18v2M3 14h18M7 11V9a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v2"/></svg></a>
-            <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></a>
-          </div>
-          <span class="toggle on" style="transform:scale(.82);"><span class="knob"></span></span>
+        <div class="m-tb"><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span><span class="cur">Housekeeping</span><span class="hb"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
+        <div class="mod-tabs">
+          <a class="active">Richieste</a>
+          <a>Camere</a>
         </div>
-        <div class="m-content" style="padding:14px 12px 16px;">
-          <div class="tbl-wrap">
-            <table class="dt" style="font-size:11.5px;">
-              <tbody>
-                <tr><td style="padding:10px 12px;">306<div style="color:var(--muted);font-size:10px;font-weight:400;">Asciugamani extra</div></td><td style="padding:10px 12px;text-align:right;"><span class="pill" style="--pb:var(--amber-bg);--pi:var(--amber-ink);--pl:var(--amber-line);font-size:9px;padding:2px 7px;"><span class="dot"></span>45 min</span></td></tr>
-                <tr><td style="padding:10px 12px;">112<div style="color:var(--muted);font-size:10px;font-weight:400;">Pulizia straordinaria</div></td><td style="padding:10px 12px;text-align:right;"><span class="pill" style="--pb:var(--green-bg);--pi:var(--green-ink);--pl:var(--green-line);font-size:9px;padding:2px 7px;"><span class="dot"></span>Fatto</span></td></tr>
-                <tr><td style="padding:10px 12px;">220<div style="color:var(--muted);font-size:10px;font-weight:400;">Aria condizionata</div></td><td style="padding:10px 12px;text-align:right;"><span class="pill" style="--pb:var(--blue-bg);--pi:var(--blue-ink);--pl:var(--blue-line);font-size:9px;padding:2px 7px;"><span class="dot"></span>In corso</span></td></tr>
-              </tbody>
-            </table>
+        <div class="mod-filters">
+          <button class="active">Tutte</button>
+          <button>Da fare</button>
+          <button>In corso</button>
+        </div>
+        <div class="m-content" style="padding:0;">
+          <div class="req-row">
+            <div><div class="n">Camera 305</div><div class="d">Pulizia completa</div><div class="tm">5 minuti fa</div></div>
+            <span class="tag" style="background:var(--red-bg);color:var(--red-ink)">Urgente</span>
+          </div>
+          <div class="req-row">
+            <div><div class="n">Camera 101</div><div class="d">Cambio asciugamani</div><div class="tm">15 minuti fa</div></div>
+            <span class="tag" style="background:var(--amber-bg);color:var(--amber-ink)">Da fare</span>
+          </div>
+          <div class="req-row">
+            <div><div class="n">Camera 220</div><div class="d">Riparazione aria condizionata</div><div class="tm">1 ora fa</div></div>
+            <span class="tag" style="background:var(--blue-bg);color:var(--blue-ink)">In corso</span>
           </div>
         </div>
       </div>
     </div>
     <div class="caption" style="max-width:420px;">
-      Niente bottom nav qui dentro — la freccia in alto a sinistra torna alla schermata di provenienza (di norma Home), non è "indietro nel browser". L'hamburger a destra resta per saltare direttamente a un'altra sezione (Team, Modules) senza dover prima tornare indietro.<br><br>
-      <b>La riga sotto la topbar</b> è la navbar di RoomCall, versione icon-only — non inventata: è lo stesso adattamento che il modulo già fa da solo oggi su schermi piccoli (<code>dashboard-header.tsx</code>, le etichette testuali spariscono sotto un certo breakpoint, restano solo le icone). Qui restano solo i 3 link interni più il toggle "in servizio"; il resto della sua barra reale (brand, account, logout) non serve più perché la shell li possiede già.
+      Niente bottom nav qui dentro — la freccia in alto a sinistra torna alla schermata di provenienza (di norma Home), non è "indietro nel browser". L'hamburger a destra apre la navigazione secondaria (vedi 07d, due opzioni a confronto).<br><br>
+      <b>Richieste / Camere</b> sono le uniche due tab permanenti: le 2-3 destinazioni usate di continuo durante il turno — sono <i>navigazione</i> di modulo, cambiano cosa vedi. <b>Tutte / Da fare / In corso</b>, subito sotto, sono <i>filtri</i> sulla stessa schermata — stesso posto, stesso elenco, vista ristretta. Le ho rese visivamente diverse apposta (sottolineatura per le tab, pillole per i filtri): confonderle sarebbe far sembrare 5 destinazioni dove ce ne sono 2.
     </div>
   </div>
+
+  <div class="proto-label">
+    <span class="idx">07d</span>
+    <div class="proto-label-wrap"><h2>Navigazione secondaria mobile — due opzioni a confronto</h2>
+    <div class="note">Una sola decisione resta aperta: dove vanno le destinazioni secondarie di Housekeeping (Report, Impostazioni Housekeeping) rispetto a quelle globali di Hotsflow.</div></div>
+  </div>
+
+  <div class="cols2">
+    <div>
+      <div class="fc-lbl" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;">Opzione A — drawer combinato</div>
+      <div class="phone drawer-open">
+        <div class="drawer-scrim"></div>
+        <div class="drawer-panel">
+          <div class="sb-grp" style="padding-top:2px;">Housekeeping</div>
+          <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8 13 13.7l-4-4L4.7 15"/></svg><span class="lbl">Report</span></a>
+          <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Impostazioni Housekeeping</span></a>
+          <div style="height:1px;background:var(--navbar-border);margin:10px 2px;"></div>
+          <div class="sb-grp">Hotsflow</div>
+          <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg><span class="lbl">Home</span></a>
+          <a class="sb-item trial"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/></svg><span class="lbl">Turni</span></a>
+          <a class="sb-item discover"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lbl">Transfer</span></a>
+          <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.6 2.5-6 5.5-6s5.5 2.4 5.5 6"/></svg><span class="lbl">Team</span></a>
+          <a class="sb-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Impostazioni</span></a>
+          <div class="sb-spacer"></div>
+          <div class="sb-account"><span class="av">MB</span><span class="info"><span class="n">Marco Bianchi</span><span class="r">Receptionist</span></span></div>
+        </div>
+        <div class="m-tb" style="filter:brightness(.7)"><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span><span class="cur">Housekeeping</span><span class="hb"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span></div>
+        <div class="m-content" style="filter:brightness(.7);min-height:280px;"></div>
+      </div>
+      <div class="caption" style="max-width:340px;">Un solo drawer, due zone chiaramente etichettate. Richieste/Camere non si ripetono qui: sono già le tab permanenti in 07c.</div>
+    </div>
+
+    <div>
+      <div class="fc-lbl" style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;">Opzione B — drawer solo globale + "Altro" sul modulo</div>
+      <div class="phone">
+        <div class="m-tb"><span class="hb"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span><span class="cur">Housekeeping</span><span class="hb"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
+        <div class="mod-tabs" style="position:relative;">
+          <a class="active">Richieste</a>
+          <a>Camere</a>
+          <a style="margin-left:auto;color:var(--accent);">Altro ▾</a>
+        </div>
+        <div style="position:relative;">
+          <div style="position:absolute;top:6px;right:12px;left:auto;width:200px;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-lg);border:1px solid var(--line);overflow:hidden;z-index:2;">
+            <div class="acct-menu">
+              <div class="opt"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8 13 13.7l-4-4L4.7 15"/></svg>Report</div>
+              <div class="opt"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg>Impostazioni Housekeeping</div>
+            </div>
+          </div>
+          <div class="m-content" style="min-height:230px;filter:brightness(.85);"></div>
+        </div>
+      </div>
+      <div class="caption" style="max-width:340px;">Il drawer (☰) qui resta <b>esclusivamente</b> globale — identico a quello di 07b, senza Report/Impostazioni Housekeeping dentro. Le destinazioni secondarie del modulo vivono solo dietro "Altro", accanto alle tab.</div>
+    </div>
+  </div>
+  <div class="caption" style="max-width:100%;">↑ <b>A favore di A</b>: un solo posto dove cercare "tutto il resto", meno probabilità di cercare Report nel posto sbagliato. <b>Contro di A</b>: il drawer globale (già usato identico per Home/Team/Moduli/Impostazioni in 07b) acquisisce una sezione in più specifica del modulo — meno prevedibile se il drawer deve restare "sempre uguale a sé stesso" ovunque nella suite. <b>A favore di B</b>: il drawer resta un concetto a sé, sempre identico indipendentemente da dove ti trovi (proprietà forte per un pattern che vale su tre moduli diversi); "Altro" resta vicino a Richieste/Camere, stesso contesto visivo della navigazione di modulo. <b>Contro di B</b>: un controllo in più da imparare (l'overflow "Altro"), e due punti di ingresso alla navigazione invece di uno solo. Non ho una preferenza netta da imporre: la B tiene più pulita la separazione shell/modulo (principio guida di tutto questo giro di modifiche); la A riduce il numero di controlli mobile da conoscere. Decisione da prendere prima di considerare chiusa la navigazione mobile.</div>
 
   <div class="proto-label">
     <span class="idx">08</span>
@@ -1869,7 +2037,7 @@
       </div>
     </div>
   </div>
-  <div class="caption" style="max-width:100%;">↑ La differenza è tutta nel Core, non nella UI: <code>has_property_access()</code> concede l'accesso a ogni property dell'org con un'unica condizione in più, senza una riga <code>memberships</code> per property. Restando dentro una property alla volta — mai una vista "tutte insieme" fusa — Home/Modules/Team continuano a funzionare in scope singolo, cambia solo quante voci compaiono in questo pannello.</div>
+  <div class="caption" style="max-width:100%;">↑ La differenza è tutta nel Core, non nella UI: <code>has_property_access()</code> concede l'accesso a ogni property dell'org con un'unica condizione in più, senza una riga <code>memberships</code> per property. Restando dentro una property alla volta — mai una vista "tutte insieme" fusa — Home/Moduli/Team continuano a funzionare in scope singolo, cambia solo quante voci compaiono in questo pannello.</div>
   </div>
 
   <div class="proto-label">
@@ -1884,15 +2052,15 @@
       <div class="dh"><span class="t">Notifiche</span><a>Segna tutte come lette</a></div>
       <div class="nrow unread">
         <span class="ic" style="background:var(--amber-bg);color:var(--amber-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/></svg></span>
-        <div><div class="tx">Camera <b>220</b> — richiesta in attesa da 45 minuti</div><div class="tm">12 minuti fa · RoomCall</div></div>
+        <div><div class="tx">Camera <b>220</b> — richiesta in attesa da 45 minuti</div><div class="tm">12 minuti fa · Housekeeping</div></div>
       </div>
       <div class="nrow unread">
         <span class="ic" style="background:var(--blue-bg);color:var(--blue-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v13"/><path d="M4 14l3 3 3-3"/></svg></span>
-        <div><div class="tx"><b>Sara Conti</b> ha chiesto uno scambio turno</div><div class="tm">40 minuti fa · Planner Turni</div></div>
+        <div><div class="tx"><b>Sara Conti</b> ha chiesto uno scambio turno</div><div class="tm">40 minuti fa · Turni</div></div>
       </div>
       <div class="nrow">
         <span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
-        <div><div class="tx">Il tuo trial di <b>Planner Turni</b> scade tra 9 giorni</div><div class="tm">ieri · Modules</div></div>
+        <div><div class="tx">Il tuo trial di <b>Turni</b> scade tra 9 giorni</div><div class="tm">ieri · Moduli</div></div>
       </div>
     </div>
     <div class="drop-panel acct-menu">
@@ -1903,7 +2071,7 @@
       <div class="opt danger"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/></svg>Esci</div>
     </div>
   </div>
-  <div class="caption" style="max-width:100%;">↑ Le notifiche arrivano da moduli diversi (RoomCall, Planner Turni, Modules stesso per gli avvisi di trial) nello stesso pannello — severity sull'icona come nel resto del sistema, mai sullo sfondo. "Esci" non chiede conferma: non è un'azione che perde dati, solo che ricarica al prossimo accesso.</div>
+  <div class="caption" style="max-width:100%;">↑ Le notifiche arrivano da moduli diversi (Housekeeping, Turni, Moduli stesso per gli avvisi di trial) nello stesso pannello — severity sull'icona come nel resto del sistema, mai sullo sfondo. "Esci" non chiede conferma: non è un'azione che perde dati, solo che ricarica al prossimo accesso.</div>
   </div>
 
   <div class="proto-label">
@@ -1917,7 +2085,7 @@
     <div class="modal-card center">
       <div class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
       <div class="title">Attivazione in arrivo</div>
-      <div class="desc">La gestione di piani e pagamenti per i moduli Hotsflow non è ancora disponibile. Scrivi al tuo referente per attivare Planner Turni oltre il trial.</div>
+      <div class="desc">La gestione di piani e pagamenti per i moduli Hotsflow non è ancora disponibile. Scrivi al tuo referente per attivare Turni oltre il trial.</div>
       <div class="actions"><button class="btn btn-ghost">Chiudi</button><button class="btn btn-primary">Contatta il team</button></div>
     </div>
   </div>
@@ -1926,7 +2094,7 @@
 
   <div class="proto-label">
     <span class="idx">11</span>
-    <div class="proto-label-wrap"><h2>Settings</h2>
+    <div class="proto-label-wrap"><h2>Impostazioni</h2>
     <div class="note">Org/property-level separato da account-level, come già nel design system esistente.</div></div>
   </div>
 
@@ -1946,8 +2114,93 @@
         <div class="set-row"><div><div class="t">Richieste in attesa oltre soglia SLA</div></div><span class="toggle on"><span class="knob"></span></span></div>
         <div class="set-row"><div><div class="t">Riepilogo settimanale via email</div></div><span class="toggle"><span class="knob"></span></span></div>
       </div>
-      <div class="caption" style="max-width:100%;">↑ Questa è la scheda "Property" — configurazione che riguarda tutto lo staff (per aprirla serve <code>core.property.manage</code>). "Account" accanto è tutt'altro: nome, password, preferenze personali di chi è loggato — le due cose condividono solo l'icona ingranaggio per coincidenza, mai lo stesso contenuto.</div>
+      <div class="caption" style="max-width:100%;">↑ Questa è la scheda "Property" — configurazione che riguarda tutto lo staff (per aprirla serve <code>core.property.manage</code>). "Account" accanto è tutt'altro: nome, password, preferenze personali di chi è loggato. La terza scheda, "Moduli", non è un'impostazione unica: ogni riga al suo interno (es. impostazioni Housekeeping) richiede la capability di gestione specifica di quel modulo — chi non ce l'ha non vede quella riga, non la vede disabilitata. Le tre schede condividono solo l'icona ingranaggio per coincidenza, mai lo stesso contenuto o lo stesso permesso.</div>
     </div>
+  </div>
+
+  <div class="proto-label">
+    <span class="idx">12</span>
+    <div class="proto-label-wrap"><h2>Stati di sistema condivisi</h2>
+    <div class="note">Un solo linguaggio per tutta la suite, non un pattern di errore diverso per ogni modulo. Leggeri di proposito — non sono schermate a sé, sono varianti dello stesso contenitore.</div></div>
+  </div>
+
+  <div class="content-narrow" style="margin:0 auto;">
+  <div class="sys-grid">
+    <div class="sys-state">
+      <div class="sys-spinner"></div>
+      <h4>Verifica accesso…</h4>
+      <p>Profilo, membership, property, moduli e permessi — un solo passaggio, non sei ancora dentro la shell.</p>
+    </div>
+    <div class="sys-state">
+      <span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+      <h4>Nessuna property</h4>
+      <p>Il tuo account non ha ancora accesso a nessuna struttura.</p>
+      <button class="btn btn-secondary">Contatta l'amministratore</button>
+    </div>
+    <div class="sys-state">
+      <span class="ic" style="background:var(--green-bg);color:var(--green-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+      <h4>Tutto in ordine</h4>
+      <p>Nessuna richiesta al momento — non è un errore, semplicemente non c'è nulla da fare.</p>
+    </div>
+    <div class="sys-state">
+      <span class="ic" style="background:var(--red-bg);color:var(--red-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg></span>
+      <h4>Dati non caricati</h4>
+      <p>Qualcosa è andato storto nel recupero dei dati — non è detto che non ci sia nulla.</p>
+      <button class="btn btn-secondary">Riprova</button>
+    </div>
+    <div class="sys-state">
+      <span class="ic" style="background:var(--slate-bg);color:var(--slate-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+      <h4>Modulo non disponibile</h4>
+      <p>Palazzo Veneziano non ha ancora attivato questo modulo.</p>
+      <button class="btn btn-secondary">Scopri il modulo</button>
+    </div>
+    <div class="sys-state">
+      <span class="ic" style="background:var(--amber-bg);color:var(--amber-ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v1"/></svg></span>
+      <h4>Non hai accesso</h4>
+      <p>Il modulo esiste, ma il tuo ruolo non ha il permesso per questa sezione.</p>
+    </div>
+  </div>
+  <div class="caption" style="max-width:100%;">↑ <b>Vuoto ≠ errore</b>: "Tutto in ordine" (verde, calmo) e "Dati non caricati" (rosso, con Riprova) sono deliberatamente diversi — confonderli fa sembrare rotto qualcosa che in realtà va benissimo. <b>Modulo non disponibile</b> (property senza entitlement) e <b>Non hai accesso</b> (permesso mancante su un modulo che la property ha) restano due messaggi distinti, stessa distinzione già vista in Home/Moduli — qui è il caso limite: qualcuno raggiunge la destinazione via link diretto o notifica invece che dalla navigazione normale. Nessuno di questi stati mostra un errore tecnico grezzo (stack trace, codice HTTP) — un solo tono per tutta la suite, indipendentemente da quale modulo l'ha causato.</div>
+  </div>
+
+  <div class="proto-label">
+    <span class="idx">13</span>
+    <div class="proto-label-wrap"><h2>Deep link — non si passa per forza dalla Home</h2>
+    <div class="note">Login di default → Home (nessun modulo aperto automaticamente). Un link diretto è un caso diverso: deve restaurare il contesto giusto, non forzare una tappa in più.</div></div>
+  </div>
+
+  <div class="content-narrow" style="margin:0 auto;">
+  <div class="set-card">
+    <h4>Un link diretto ricostruisce il contesto, non salta la shell</h4>
+    <div style="font-family:var(--mono);font-size:11.5px;background:var(--surface-2);border-radius:var(--r-sm);padding:10px 14px;margin:12px 0 18px;color:var(--ink-2);overflow-x:auto;">app.hotsflow.com/housekeeping/richieste/a12f3</div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;gap:12px;align-items:flex-start;"><span style="font-family:var(--mono);font-weight:800;color:var(--accent);width:16px;flex-shrink:0;">1</span><span style="font-size:12.5px;color:var(--ink-2);">Ripristina la shell — sessione e profilo</span></div>
+      <div style="display:flex;gap:12px;align-items:flex-start;"><span style="font-family:var(--mono);font-weight:800;color:var(--accent);width:16px;flex-shrink:0;">2</span><span style="font-size:12.5px;color:var(--ink-2);">Risolve organization/property corretta per questo link</span></div>
+      <div style="display:flex;gap:12px;align-items:flex-start;"><span style="font-family:var(--mono);font-weight:800;color:var(--accent);width:16px;flex-shrink:0;">3</span><span style="font-size:12.5px;color:var(--ink-2);">Verifica l'entitlement del modulo per quella property</span></div>
+      <div style="display:flex;gap:12px;align-items:flex-start;"><span style="font-family:var(--mono);font-weight:800;color:var(--accent);width:16px;flex-shrink:0;">4</span><span style="font-size:12.5px;color:var(--ink-2);">Verifica il permesso dell'utente sulla destinazione richiesta</span></div>
+      <div style="display:flex;gap:12px;align-items:flex-start;"><span style="font-family:var(--mono);font-weight:800;color:var(--accent);width:16px;flex-shrink:0;">5</span><span style="font-size:12.5px;color:var(--ink-2);">Renderizza Housekeeping → Richieste → dettaglio <code>a12f3</code>, dentro la shell — sidebar e topbar già al posto giusto</span></div>
+    </div>
+  </div>
+  <div class="caption" style="max-width:100%;">↑ Se un controllo fallisce (property non risolvibile, modulo non entitled, permesso mancante), la risposta è uno degli <b>stati di sistema</b> qui sopra (12) — mai un redirect silenzioso alla Home che nasconde perché il link non ha funzionato. Rilevante per: notifiche (09), link da email/push, schermate operative salvate nei preferiti, integrazioni future. La Home resta comunque la destinazione predefinita <i>dopo il login</i> quando non c'è un link specifico da risolvere — non "apri l'ultimo modulo usato": quella è un'idea rimandata a un'iterazione futura.</div>
+  </div>
+
+  <div class="proto-label">
+    <span class="idx">14</span>
+    <div class="proto-label-wrap"><h2>Gerarchia dell'informazione</h2>
+    <div class="note">Cinque livelli, sempre distinti — su desktop e su mobile. Non collassarli mai in un solo sistema di navigazione.</div></div>
+  </div>
+
+  <div class="content-narrow" style="margin:0 auto;">
+  <div class="set-card">
+    <div class="hier-diagram">
+      <div class="hier-row" style="margin-left:0;"><span class="hier-badge" style="background:var(--accent);color:#fff;">1</span><div><div class="n">Hotsflow</div><div class="d">La piattaforma — livello shell</div></div></div>
+      <div class="hier-row" style="margin-left:22px;"><span class="hier-badge">2</span><div><div class="n">Palazzo Veneziano</div><div class="d">Property — il contesto operativo corrente</div></div></div>
+      <div class="hier-row" style="margin-left:44px;"><span class="hier-badge">3</span><div><div class="n">Housekeeping</div><div class="d">Modulo</div></div></div>
+      <div class="hier-row" style="margin-left:66px;"><span class="hier-badge">4</span><div><div class="n">Richieste</div><div class="d">Destinazione di modulo</div></div></div>
+      <div class="hier-row" style="margin-left:88px;"><span class="hier-badge">5</span><div><div class="n">Da fare</div><div class="d">Filtro / stato schermata</div></div></div>
+    </div>
+  </div>
+  <div class="caption" style="max-width:100%;">↑ Ogni livello ha un solo posto dove vive: 1–2 nella sidebar/property selector (chrome di shell), 3 nella sidebar sotto "Moduli", 4 nelle tab primarie del modulo (07c), 5 nei filtri della schermata — mai nello stesso controllo visivo di livello 4. È la stessa distinzione già applicata in tutto questo giro di modifiche (tab vs filtri in 07c, sotto-barra di modulo vs sidebar di shell in 06); qui raccolta in un solo riferimento.</div>
   </div>
 
 </div>
