@@ -38,9 +38,14 @@ const restaConnessoStorage = {
   },
 };
 
-// Finché le variabili d'ambiente non sono impostate (fase di transizione dalla demo
-// solo-localStorage al backend reale) l'app deve continuare a funzionare: supabase
-// resta null e chi lo usa deve prevedere il fallback.
-export const supabase = url && anonKey
+// Standalone: crea il client dall'ambiente del Planner. Embedded: module-entry
+// sostituisce questa live binding con il client già autenticato e posseduto da
+// Hotsflow, evitando una seconda sessione Supabase nello stesso browser.
+export let supabase = url && anonKey
   ? createClient(url, anonKey, { auth: { storage: restaConnessoStorage } })
   : null;
+
+export function configureSupabaseClient(client) {
+  if (!client) throw new Error("Turni module requires a Supabase client");
+  supabase = client;
+}
