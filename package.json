@@ -1,22 +1,38 @@
 {
-  "name": "planner-turni-reception",
+  "name": "@hotsflow/turni-module",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "files": [
+    "dist",
+    "module.d.ts"
+  ],
+  "exports": {
+    ".": {
+      "types": "./module.d.ts",
+      "import": "./dist/turni-module.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:module": "BUILD_MODULE=1 vite build",
+    "prepare": "npm run build:module",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.112.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+  "peerDependencies": {
+    "@supabase/supabase-js": ">=2.112.0 <3",
+    "react": ">=18.3.1 <20",
+    "react-dom": ">=18.3.1 <20"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@vitejs/plugin-react": "^4.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vite": "^5.4.0",
     "vitest": "^2.1.9"
   }
