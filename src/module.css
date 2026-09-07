@@ -1,0 +1,15 @@
+.ptn-embedded .planner-turni-app {
+  min-height: auto !important;
+  background: transparent !important;
+}
+
+/* Hotsflow owns the global product header/account chrome. Planner Turni keeps
+   its header in standalone mode, while the embedded adapter removes only that
+   first direct div. The module's own operational navigation stays visible. */
+.ptn-embedded .planner-turni-app > div:first-of-type {
+  display: none !important;
+}
+
+.ptn-embedded .planner-turni-app > div:last-child {
+  max-width: none !important;
+}
